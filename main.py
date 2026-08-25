@@ -16,6 +16,7 @@ import os
 import socket
 import threading
 import time
+import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -450,6 +451,31 @@ def _validate_env(establishments: list[EstablishmentConfig]) -> None:
         )
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Alertas de falha (Discord Webhook)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def alertar_discord(mensagem: str) -> None:
+    """
+    Envia uma mensagem de alerta para o canal Discord configurado via webhook.
+    Se DISCORD_WEBHOOK_URL não estiver definida no .env, retorna silenciosamente.
+    Falhas de rede são engolidas para nunca travar o worker.
+    """
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+    if not webhook_url:
+        return
+
+    try:
+        requests.post(
+            webhook_url,
+            json={"content": mensagem},
+            timeout=5,
+        )
+    except Exception:
+        # Falha no Discord não deve impactar o worker
+        pass
+
+
 def main() -> None:
     # 1. Inicializa o banco de dados (cria tabelas se necessário)
     log.info("Inicializando banco de dados...")
@@ -471,4 +497,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        erro = traceback.format_exc()
+        alertar_discord(
+            f"🚨 **ALERTA CRÍTICO - JUMP PARK WORKER** 🚨\n"
+            f"```python\n{erro}\n```"
+        )
+        raise e
