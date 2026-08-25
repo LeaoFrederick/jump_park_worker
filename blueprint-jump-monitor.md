@@ -32,6 +32,14 @@ Estes pontos já foram confirmados em testes reais e servem como contrato fixo p
 | Establishment atual (Fase 1) | 1 estabelecimento liberado no plano contratado da API |
 | Establishments futuros (Fase 2) | +2 estabelecimentos, mediante upgrade do plano comercial |
 
+### ⚠ Regra de Negócio Crítica — Desbloqueio Cross-Estabelecimento
+
+Uma placa bloqueada pode estar vinculada ao cliente `"CARRO BLOQUEADO"` em **mais de um estabelecimento** simultaneamente (COBRANÇA, CANAL e PRINCIPAL compartilham a mesma base de veículos). Portanto:
+
+> **Ao detectar o pagamento da taxa de desbloqueio (R$ 200,00 pago) em qualquer estabelecimento, o worker DEVE remover a placa do cliente `"CARRO BLOQUEADO"` em TODOS os estabelecimentos nos quais ela estiver presente.**
+
+Isso está implementado em `run_monitor()` via loop `for target_state in states` que itera sobre todos os estados antes de chamar `unlock_vehicle()`. Não alterar este comportamento sem atualizar esta seção.
+
 ### Endpoint de Ordens de Serviço (fonte real do pagamento)
 
 Confirmado na documentação — **este é o endpoint que carrega a lógica de aquisição do pagamento**, não a fatura do cliente:
@@ -329,13 +337,132 @@ A Fase 0 está concluída quando:
 ## 6. Fase 2 — Escala e Expansão
 
 - Upgrade do plano comercial da API para os outros 2 estabelecimentos.
-- 3 instâncias independentes do worker (uma por estabelecimento).
+- Worker único multi-estabelecimento (arquitetura atual) com desbloqueio cross-estabelecimento ativo.
 - Consumo global estimado: 18 requisições/minuto (3 workers × 6/min) → **15% da capacidade de 120 req/min**, dentro de margem segura.
 - Deploy na VM Oracle Cloud (ver §3.1), com IP da VM cadastrado na whitelist da Jump.
 
 ---
 
-## 7. Segurança e Boas Práticas (aplicar desde a Fase 0)
+## 7. Fase 3 — Data Pipeline e Monitoramento (MySQL local + Looker Studio)
+
+### Objetivo
+
+Registrar todos os eventos de bloqueio e desbloqueio em um banco de dados MySQL rodando na **mesma VM Oracle** do worker, e expor os dados via **Looker Studio** (conectado diretamente ao MySQL pelo IP público da VM).
+
+### 7.1 Arquitetura
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  VM Oracle Cloud (Always Free)                           │
+│                                                          │
+│  ┌─────────────┐    threading    ┌─────────────────┐     │
+│  │   Worker     │◄──────────────►│  FastAPI (API)   │     │
+│  │  (polling)   │                │  POST /api/      │     │
+│  └──────┬───────┘                │  eventos         │     │
+│         │                        └────────┬─────────┘     │
+│         │  registrar_evento()             │               │
+│         │                                 │               │
+│         ▼                                 ▼               │
+│  ┌──────────────────────────────────────────┐             │
+│  │        MySQL (banco local)               │             │
+│  │        tabela: eventos                   │             │
+│  └──────────────────┬───────────────────────┘             │
+│                     │                                     │
+└─────────────────────┼─────────────────────────────────────┘
+                      │ porta 3306 (IP público)
+                      ▼
+               ┌──────────────┐      ┌──────────────────┐
+               │ Looker Studio│      │ WebApp (Google    │
+               │ (dashboard)  │      │  Apps Script)     │
+               └──────────────┘      └──────────────────┘
+```
+
+### 7.2 Schema do Banco — Tabela `eventos`
+
+Definido via SQLAlchemy ORM em `database.py`:
+
+| Coluna | Tipo | Nullable | Descrição |
+|---|---|---|---|
+| `id` | Integer (PK, auto) | Não | Chave primária |
+| `timestamp` | DateTime | Não | Quando o evento ocorreu |
+| `evento` | String(20) | Não | `"BLOQUEIO"` ou `"DESBLOQUEIO"` |
+| `metodo` | String(20) | Não | `"AUTOMATICO"` ou `"MANUAL"` |
+| `autor` | String(100) | Não | `"System Worker"` ou nome do operador |
+| `motivo` | Text | Não | Justificativa da ação |
+| `placa` | String(20) | Não | Placa do veículo (indexada) |
+| `cliente_id` | String(50) | Não | ID do cliente Jump Park (texto longo) |
+| `estabelecimento_origem` | String(50) | Não | Onde o pagamento foi detectado |
+| `estabelecimentos_afetados` | Text | Não | Lista separada por vírgula |
+| `os_id` | String(100) | Sim | ID da OS que confirmou pagamento |
+| `valor_taxa` | Float | Sim | Valor da taxa cobrada |
+| `status_financeiro` | String(50) | Sim | Ex: `"Pago"` |
+| `exit_datetime` | DateTime | Sim | Data/hora de saída do veículo |
+
+### 7.3 API HTTP (FastAPI)
+
+Módulo `api.py` — roda em thread daemon no mesmo processo do worker:
+
+| Rota | Método | Descrição |
+|---|---|---|
+| `/api/eventos` | POST | Recebe JSON do WebApp, valida via Pydantic, grava no banco |
+| `/api/health` | GET | Healthcheck simples |
+
+CORS totalmente aberto para permitir chamadas do Google Apps Script.
+
+### 7.4 Integração no Worker
+
+O worker (`main.py`) chama `database.registrar_evento()` diretamente após cada `unlock_vehicle()` bem-sucedido:
+
+```python
+registrar_evento(
+    evento="DESBLOQUEIO",
+    metodo="AUTOMATICO",
+    autor="System Worker",
+    motivo=f"Taxa R$ {TAXA_VALOR:.2f} paga — OS detectada em {tag}",
+    placa=plate,
+    cliente_id=cfg.blocked_client_id,
+    estabelecimento_origem=tag,
+    estabelecimentos_afetados=", ".join(unlocked_from),
+    os_id=info.get("os_id"),
+    valor_taxa=TAXA_VALOR,
+    status_financeiro=info.get("status_financeiro"),
+    exit_datetime=exit_dt,
+)
+```
+
+### 7.5 Dashboard Looker Studio
+
+Conectar ao MySQL da VM Oracle via **MySQL connector** (IP público + porta 3306). Painéis previstos:
+
+- **KPIs principais**: total de bloqueios (período), total de desbloqueios, taxa de conversão, receita total.
+- **Timeline**: eventos de bloqueio/desbloqueio no tempo (gráfico de linha).
+- **Tabela de placas ativas**: lista ao vivo de placas ainda bloqueadas com data do bloqueio.
+- **Filtro por estabelecimento**: COBRANÇA / CANAL / PRINCIPAL.
+- **Filtro por método**: AUTOMATICO / MANUAL.
+
+### 7.6 Variáveis de Ambiente Necessárias
+
+```dotenv
+# Banco de Dados (MySQL local na VM Oracle)
+DATABASE_URL=mysql+pymysql://jump_user:SENHA@localhost:3306/jump_park
+
+# API HTTP (FastAPI — recebe bloqueios manuais do WebApp)
+API_HOST=0.0.0.0
+API_PORT=8000
+```
+
+### 7.7 Critério de Saída da Fase 3
+
+- [ ] MySQL instalado e rodando na VM Oracle Cloud.
+- [ ] Tabela `eventos` criada automaticamente pelo `init_db()`.
+- [ ] Worker registra desbloqueios automáticos no banco sem erros.
+- [ ] `POST /api/eventos` aceita e grava bloqueios manuais do WebApp.
+- [ ] Looker Studio conectado ao MySQL da VM e exibindo dados ao vivo.
+- [ ] Firewall da VM Oracle libera portas 3306 (MySQL) e 8000 (API).
+
+---
+
+## 8. Segurança e Boas Práticas (aplicar desde a Fase 0)
 
 - Token nunca versionado em código-fonte — sempre via variável de ambiente / `.env` (adicionar `.env` ao `.gitignore` desde o primeiro commit).
 - Rotação periódica de credenciais; revogação imediata se exposto.
@@ -344,7 +471,7 @@ A Fase 0 está concluída quando:
 
 ---
 
-## 8. Próximos Passos Imediatos
+## 9. Próximos Passos Imediatos
 
 1. Bloquear manualmente uma placa de teste no sistema (gerando o registro `"CARRO BLOQUEADO"` em `/clients`).
 2. Simular/realizar um pagamento de R$ 200,00 vinculado a essa placa, gerando a OS correspondente.

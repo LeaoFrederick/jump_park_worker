@@ -1,2 +1,6 @@
 requests
 python-dotenv
+sqlalchemy
+pymysql
+fastapi
+uvicorn[standard]

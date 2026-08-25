@@ -1,24 +1,29 @@
 """
 jump_park_worker/main.py
-Worker de monitoramento do Jump Park.
+Worker de monitoramento do Jump Park — Multi-Estabelecimento.
 
-Lógica migrada de:
-  - test_jump_monitor.py   → loop principal, cache de placas, cruzamento, desbloqueio
-  - test_jump_api.py       → cliente HTTP com patch IPv4, autenticação Bearer
-  - test_service_orders.py → busca de ordens de serviço com filtro de período
+Arquitetura:
+  - Thread principal: loop de polling (worker de desbloqueio automático)
+  - Thread daemon:    servidor FastAPI (API para bloqueios/desbloqueios manuais)
+  - Persistência:     MySQL local via SQLAlchemy (módulo database.py)
 
 Credenciais lidas exclusivamente do .env (nunca hardcoded).
+Suporta múltiplos estabelecimentos, cada um com suas credenciais próprias.
 """
 
-import json
 import logging
 import os
 import socket
+import threading
 import time
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 import requests
+import uvicorn
 from dotenv import load_dotenv
+
+from database import init_db, registrar_evento
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -59,14 +64,93 @@ def _apply_ipv4_patch() -> None:
 _apply_ipv4_patch()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Configurações (carregadas do .env)
+# Modelo de configuração por estabelecimento
+# ──────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class EstablishmentConfig:
+    """Agrupa todas as credenciais e metadados de um estabelecimento Jump Park."""
+    label: str                    # Nome legível (ex: "COBRANÇA", "CANAL", "PRINCIPAL")
+    prefix: str                   # Prefixo no .env (ex: "COBRANCA", "CANAL", "PRINCIPAL")
+    integration_id: str           # ID de integração na API
+    establishment_id: str         # ID do estabelecimento na API
+    token: str                    # Bearer token de acesso
+    origin: str = ""              # Domínio cadastrado no Site Admin (opcional)
+    blocked_client_id: str = ""   # ID do cliente "CARRO BLOQUEADO" (pode estar vazio)
+
+    @property
+    def is_ready(self) -> bool:
+        """Retorna True se o estabelecimento tem todas as credenciais necessárias."""
+        return bool(
+            self.integration_id
+            and self.establishment_id
+            and self.token
+            and self.blocked_client_id
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Carregamento de estabelecimentos do .env
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Prefixos configurados — adicione novos aqui ao expandir
+_ESTABLISHMENT_PREFIXES = [
+    ("COBRANCA", "COBRANÇA"),
+    ("CANAL",    "CANAL"),
+    ("PRINCIPAL","PRINCIPAL"),
+]
+
+
+def load_establishments() -> list[EstablishmentConfig]:
+    """Carrega todos os estabelecimentos configurados no .env."""
+    establishments = []
+    for prefix, label in _ESTABLISHMENT_PREFIXES:
+        integration_id    = os.getenv(f"{prefix}_INTEGRATION_ID", "")
+        establishment_id  = os.getenv(f"{prefix}_ESTABLISHMENT_ID", "")
+        token             = os.getenv(f"{prefix}_ACCESS_TOKEN", "")
+        origin            = os.getenv(f"{prefix}_ORIGIN", "").strip()
+        blocked_client_id = os.getenv(f"{prefix}_BLOCKED_CLIENT_ID", "")
+
+        # Pula completamente se nem integration_id tem (bloco não configurado)
+        if not integration_id:
+            log.debug("[CONFIG] Prefixo %s sem INTEGRATION_ID — ignorado.", prefix)
+            continue
+
+        config = EstablishmentConfig(
+            label=label,
+            prefix=prefix,
+            integration_id=integration_id,
+            establishment_id=establishment_id,
+            token=token,
+            origin=origin,
+            blocked_client_id=blocked_client_id,
+        )
+
+        if config.is_ready:
+            log.info(
+                "[CONFIG] ✔ %s (ID %s) — pronto para monitoramento.",
+                label, establishment_id,
+            )
+        else:
+            missing = []
+            if not establishment_id: missing.append("ESTABLISHMENT_ID")
+            if not token:            missing.append("ACCESS_TOKEN")
+            if not blocked_client_id: missing.append("BLOCKED_CLIENT_ID")
+            log.warning(
+                "[CONFIG] ⚠ %s (ID %s) — pendente, faltam: %s. "
+                "Será ignorado no monitoramento até ser configurado.",
+                label, establishment_id or "?", ", ".join(missing),
+            )
+
+        establishments.append(config)
+
+    return establishments
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Configurações globais do worker (carregadas do .env)
 # ──────────────────────────────────────────────────────────────────────────────
 BASE_URL          = "https://new-web.jumpparkapi.com.br"
-INTEGRATION_ID    = os.getenv("JUMP_INTEGRATION_ID")
-ESTABLISHMENT_ID  = os.getenv("JUMP_ESTABLISHMENT_ID")
-TOKEN             = os.getenv("JUMP_ACCESS_TOKEN")
-BLOCKED_CLIENT_ID = os.getenv("JUMP_BLOCKED_CLIENT_ID")  # ID do cliente "CARRO BLOQUEADO"
-ORIGIN            = os.getenv("JUMP_ORIGIN", "").strip()  # Domínio cadastrado no Site Admin (opcional)
 
 # Parâmetros do worker
 POLLING_INTERVAL  = int(os.getenv("POLLING_INTERVAL_SECONDS", "10"))   # segundos entre ciclos
@@ -74,12 +158,10 @@ CACHE_DURATION    = int(os.getenv("CACHE_DURATION_SECONDS", "1800"))    # 30 min
 TAXA_VALOR        = float(os.getenv("TAXA_BLOQUEIO_VALOR", "200.00"))   # valor da taxa de desbloqueio
 WINDOW_DAYS       = int(os.getenv("SEARCH_WINDOW_DAYS", "7"))           # janela de busca de OS
 
-_REQUIRED_VARS = [
-    ("JUMP_INTEGRATION_ID", INTEGRATION_ID),
-    ("JUMP_ESTABLISHMENT_ID", ESTABLISHMENT_ID),
-    ("JUMP_ACCESS_TOKEN", TOKEN),
-    ("JUMP_BLOCKED_CLIENT_ID", BLOCKED_CLIENT_ID),
-]
+# Parâmetros da API
+API_HOST = os.getenv("API_HOST", "0.0.0.0")
+API_PORT = int(os.getenv("API_PORT", "8000"))
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Headers HTTP padrão
@@ -87,9 +169,9 @@ _REQUIRED_VARS = [
 # User-Agent explícito: o padrão da lib requests (python-requests/x.x) é
 # bloqueado por WAFs como o Cloudflare que ficam na frente do servidor Jump.
 # ──────────────────────────────────────────────────────────────────────────────
-def _build_headers() -> dict:
+def _build_headers(config: EstablishmentConfig) -> dict:
     headers = {
-        "Authorization": f"Bearer {TOKEN}",
+        "Authorization": f"Bearer {config.token}",
         "Accept": "application/json",
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -98,47 +180,47 @@ def _build_headers() -> dict:
         ),
     }
     # Se um domínio foi cadastrado no Site Admin, o header Origin é obrigatório
-    if ORIGIN:
-        headers["Origin"] = ORIGIN
+    if config.origin:
+        headers["Origin"] = config.origin
     return headers
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Funções de API
+# Funções de API (parametrizadas por estabelecimento)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def get_blocked_plates() -> list[str]:
-    """Busca as placas vinculadas ao cliente 'CARRO BLOQUEADO'."""
+def get_blocked_plates(config: EstablishmentConfig) -> list[str]:
+    """Busca as placas vinculadas ao cliente 'CARRO BLOQUEADO' de um estabelecimento."""
     url = (
-        f"{BASE_URL}/api/{INTEGRATION_ID}"
-        f"/public/establishment/{ESTABLISHMENT_ID}"
-        f"/clients/{BLOCKED_CLIENT_ID}/vehicles"
+        f"{BASE_URL}/api/{config.integration_id}"
+        f"/public/establishment/{config.establishment_id}"
+        f"/clients/{config.blocked_client_id}/vehicles"
     )
     try:
-        response = requests.get(url, headers=_build_headers(), timeout=10)
+        response = requests.get(url, headers=_build_headers(config), timeout=10)
         if response.status_code == 200:
             data = response.json().get("data", [])
             plates = [v.get("plate") for v in data if v.get("plate")]
             return plates
         if response.status_code == 401:
             log.error(
-                "[CACHE] Erro ao buscar veículos: HTTP 401 (Não autorizado). "
-                "Verifique se JUMP_ACCESS_TOKEN e JUMP_INTEGRATION_ID estão corretos e se "
-                "JUMP_ORIGIN está definido com o domínio cadastrado no Site Admin.\n"
-                "  URL usada: %s", url,
+                "[CACHE][%s] Erro ao buscar veículos: HTTP 401 (Não autorizado). "
+                "Verifique se ACCESS_TOKEN e INTEGRATION_ID estão corretos e se "
+                "ORIGIN está definido com o domínio cadastrado no Site Admin.\n"
+                "  URL usada: %s", config.label, url,
             )
         else:
-            log.error("[CACHE] Erro ao buscar veículos: HTTP %s", response.status_code)
+            log.error("[CACHE][%s] Erro ao buscar veículos: HTTP %s", config.label, response.status_code)
     except requests.exceptions.RequestException as exc:
-        log.error("[CACHE] Exceção na requisição: %s", exc)
+        log.error("[CACHE][%s] Exceção na requisição: %s", config.label, exc)
     return []
 
 
-def get_service_orders(window_days: int = WINDOW_DAYS) -> list[dict]:
-    """Busca ordens de serviço dos últimos `window_days` dias."""
+def get_service_orders(config: EstablishmentConfig, window_days: int = WINDOW_DAYS) -> list[dict]:
+    """Busca ordens de serviço dos últimos `window_days` dias de um estabelecimento."""
     url = (
-        f"{BASE_URL}/api/{INTEGRATION_ID}"
-        f"/public/establishment/{ESTABLISHMENT_ID}"
+        f"{BASE_URL}/api/{config.integration_id}"
+        f"/public/establishment/{config.establishment_id}"
         "/serviceorders/export/json"
     )
     agora  = datetime.now()
@@ -150,114 +232,240 @@ def get_service_orders(window_days: int = WINDOW_DAYS) -> list[dict]:
         "endTime":   "23:59:59",
     }
     try:
-        response = requests.get(url, headers=_build_headers(), params=params, timeout=15)
+        response = requests.get(url, headers=_build_headers(config), params=params, timeout=15)
         if response.status_code == 200:
             return response.json().get("data", {}).get("content", [])
-        log.error("[API] Erro ao buscar ordens: HTTP %s", response.status_code)
+        log.error("[API][%s] Erro ao buscar ordens: HTTP %s", config.label, response.status_code)
     except requests.exceptions.RequestException as exc:
-        log.error("[API] Exceção na requisição: %s", exc)
+        log.error("[API][%s] Exceção na requisição: %s", config.label, exc)
     return []
 
 
-def unlock_vehicle(plate: str) -> bool:
+def unlock_vehicle(config: EstablishmentConfig, plate: str) -> bool:
     """Remove o veículo da conta 'CARRO BLOQUEADO', liberando-o no sistema."""
     url = (
-        f"{BASE_URL}/api/{INTEGRATION_ID}"
-        f"/public/establishment/{ESTABLISHMENT_ID}"
-        f"/clients/{BLOCKED_CLIENT_ID}/vehicles/{plate}"
+        f"{BASE_URL}/api/{config.integration_id}"
+        f"/public/establishment/{config.establishment_id}"
+        f"/clients/{config.blocked_client_id}/vehicles/{plate}"
     )
     try:
-        response = requests.delete(url, headers=_build_headers(), timeout=10)
+        response = requests.delete(url, headers=_build_headers(config), timeout=10)
         if response.status_code == 200:
-            log.info("[UNLOCK] Placa %s desbloqueada com sucesso.", plate)
+            log.info("[UNLOCK][%s] Placa %s desbloqueada com sucesso.", config.label, plate)
             return True
         log.error(
-            "[UNLOCK] Falha ao desbloquear %s: HTTP %s — %s",
-            plate, response.status_code, response.text,
+            "[UNLOCK][%s] Falha ao desbloquear %s: HTTP %s — %s",
+            config.label, plate, response.status_code, response.text,
         )
     except requests.exceptions.RequestException as exc:
-        log.error("[UNLOCK] Exceção ao desbloquear %s: %s", plate, exc)
+        log.error("[UNLOCK][%s] Exceção ao desbloquear %s: %s", config.label, plate, exc)
     return False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Estado de monitoramento por estabelecimento
+# ──────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class MonitorState:
+    """Mantém o estado de cache e timestamps para um estabelecimento."""
+    config: EstablishmentConfig
+    cache_plates: list[str] = field(default_factory=list)
+    last_cache_update: float = 0.0
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Loop principal do worker
 # ──────────────────────────────────────────────────────────────────────────────
 
-def run_monitor() -> None:
-    """Executa o monitoramento em loop contínuo."""
+def run_monitor(establishments: list[EstablishmentConfig]) -> None:
+    """Executa o monitoramento em loop contínuo para todos os estabelecimentos."""
+    # Filtra apenas os estabelecimentos prontos para monitorar
+    ready = [e for e in establishments if e.is_ready]
+    pending = [e for e in establishments if not e.is_ready]
+
+    if not ready:
+        log.error(
+            "Nenhum estabelecimento está completamente configurado. "
+            "Verifique o .env e preencha os campos obrigatórios."
+        )
+        return
+
     log.info("Iniciando worker de monitoramento...")
     log.info(
-        "Estabelecimento: %s | Cliente Bloqueio: %s | Polling: %ss | Cache: %ss",
-        ESTABLISHMENT_ID, BLOCKED_CLIENT_ID, POLLING_INTERVAL, CACHE_DURATION,
+        "Estabelecimentos ativos: %s | Polling: %ss | Cache: %ss",
+        ", ".join(f"{e.label} (ID {e.establishment_id})" for e in ready),
+        POLLING_INTERVAL, CACHE_DURATION,
     )
+    if pending:
+        log.warning(
+            "Estabelecimentos pendentes (falta BLOCKED_CLIENT_ID): %s",
+            ", ".join(f"{e.label} (ID {e.establishment_id})" for e in pending),
+        )
 
-    cache_plates: list[str] = []
-    last_cache_update: float = 0.0
+    # Inicializa estado separado para cada estabelecimento
+    states = [MonitorState(config=e) for e in ready]
 
     while True:
         now = time.time()
 
-        # ── 1. Atualiza cache de placas bloqueadas a cada CACHE_DURATION ───────
-        if not cache_plates or (now - last_cache_update) >= CACHE_DURATION:
-            log.info("[CACHE] Atualizando lista de placas bloqueadas...")
-            new_plates = get_blocked_plates()
-            if new_plates:
-                cache_plates = new_plates
-                last_cache_update = now
-                log.info("[CACHE] %d placa(s) carregada(s): %s", len(cache_plates), cache_plates)
-            else:
-                log.warning("[CACHE] Nenhuma placa encontrada ou erro na atualização.")
+        for state in states:
+            cfg = state.config
+            tag = cfg.label
 
-        # ── 2. Cruzamento de ordens de serviço com placas bloqueadas ──────────
-        if cache_plates:
-            orders = get_service_orders()
-            placas_pagas: dict[str, str] = {}
-
-            for ordem in orders:
-                plate    = ordem.get("plate")
-                valor    = round(float(ordem.get("totalAmount", 0)), 2)
-                situacao = ordem.get("financialSituationName")
-                saida    = ordem.get("exitDateTime", "Data desconhecida")
-
-                if plate in cache_plates and valor == TAXA_VALOR and situacao == "Pago":
-                    # dict garante que mantemos só a última OS da mesma placa
-                    placas_pagas[plate] = saida
-
-            if placas_pagas:
-                for plate, data_pagamento in placas_pagas.items():
+            # ── 1. Atualiza cache de placas bloqueadas a cada CACHE_DURATION ─
+            if not state.cache_plates or (now - state.last_cache_update) >= CACHE_DURATION:
+                log.info("[CACHE][%s] Atualizando lista de placas bloqueadas...", tag)
+                new_plates = get_blocked_plates(cfg)
+                if new_plates:
+                    state.cache_plates = new_plates
+                    state.last_cache_update = now
                     log.info(
-                        "[MONITOR] Placa %s pagou R$ %.2f em %s → desbloqueando...",
-                        plate, TAXA_VALOR, data_pagamento,
+                        "[CACHE][%s] %d placa(s) carregada(s): %s",
+                        tag, len(state.cache_plates), state.cache_plates,
                     )
-                    if unlock_vehicle(plate):
-                        cache_plates.remove(plate)
+                else:
+                    log.warning("[CACHE][%s] Nenhuma placa encontrada ou erro na atualização.", tag)
+
+            # ── 2. Cruzamento de ordens de serviço com placas bloqueadas ─────
+            if state.cache_plates:
+                orders = get_service_orders(cfg)
+                placas_pagas: dict[str, dict] = {}
+
+                for ordem in orders:
+                    plate    = ordem.get("plate")
+                    valor    = round(float(ordem.get("totalAmount", 0)), 2)
+                    situacao = ordem.get("financialSituationName")
+                    saida    = ordem.get("exitDateTime", "Data desconhecida")
+                    os_id    = ordem.get("serviceOrderId", "")
+
+                    if plate in state.cache_plates and valor == TAXA_VALOR and situacao == "Pago":
+                        # dict garante que mantemos só a última OS da mesma placa
+                        placas_pagas[plate] = {
+                            "exit_datetime": saida,
+                            "os_id": str(os_id),
+                            "status_financeiro": situacao,
+                        }
+
+                if placas_pagas:
+                    for plate, info in placas_pagas.items():
+                        log.info(
+                            "[MONITOR][%s] Placa %s pagou R$ %.2f em %s → desbloqueando em TODOS os estabelecimentos...",
+                            tag, plate, TAXA_VALOR, info["exit_datetime"],
+                        )
+                        # ── Desbloqueio cross-estabelecimento ─────────────────────
+                        # A placa pode estar vinculada ao "CARRO BLOQUEADO" em mais
+                        # de um estabelecimento. Ao confirmar pagamento em qualquer
+                        # um deles, removemos de todos os que a contiverem.
+                        unlocked_from = []
+                        for target_state in states:
+                            if plate in target_state.cache_plates:
+                                if unlock_vehicle(target_state.config, plate):
+                                    target_state.cache_plates.remove(plate)
+                                    unlocked_from.append(target_state.config.label)
+                                    log.info(
+                                        "[UNLOCK][%s] Placa %s removida do cache de %s.",
+                                        tag, plate, target_state.config.label,
+                                    )
+
+                        # ── Registra evento no banco de dados ─────────────────────
+                        if unlocked_from:
+                            # Parse exit_datetime se possível
+                            exit_dt = None
+                            try:
+                                raw = info["exit_datetime"]
+                                if raw and raw != "Data desconhecida" and not raw.startswith("0001"):
+                                    exit_dt = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S")
+                            except (ValueError, TypeError):
+                                pass
+
+                            registrar_evento(
+                                evento="DESBLOQUEIO",
+                                metodo="AUTOMATICO",
+                                autor="System Worker",
+                                motivo=f"Taxa R$ {TAXA_VALOR:.2f} paga — OS detectada no estabelecimento {tag}",
+                                placa=plate,
+                                cliente_id=cfg.blocked_client_id,
+                                estabelecimento_origem=tag,
+                                estabelecimentos_afetados=", ".join(unlocked_from),
+                                os_id=info.get("os_id"),
+                                valor_taxa=TAXA_VALOR,
+                                status_financeiro=info.get("status_financeiro"),
+                                exit_datetime=exit_dt,
+                            )
+                else:
+                    log.info("[MONITOR][%s] Nenhuma placa bloqueada realizou o pagamento no período.", tag)
             else:
-                log.info("[MONITOR] Nenhuma placa bloqueada realizou o pagamento no período.")
-        else:
-            log.info("[MONITOR] Aguardando cache de placas para iniciar monitoramento...")
+                log.info("[MONITOR][%s] Aguardando cache de placas para iniciar monitoramento...", tag)
 
         time.sleep(POLLING_INTERVAL)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Servidor API (thread daemon)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _start_api_server() -> None:
+    """Inicia o servidor FastAPI em uma thread daemon."""
+    from api import app
+
+    log.info("[API] Iniciando servidor FastAPI em %s:%s...", API_HOST, API_PORT)
+    uvicorn.run(
+        app,
+        host=API_HOST,
+        port=API_PORT,
+        log_level="info",
+        # Desabilita reload — estamos rodando via threading, não CLI
+        # Desabilita signal handlers — a thread principal cuida do SIGINT
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Entrypoint
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _validate_env() -> None:
-    """Valida que todas as variáveis obrigatórias estão definidas no .env."""
-    missing = [name for name, value in _REQUIRED_VARS if not value]
-    if missing:
+def _validate_env(establishments: list[EstablishmentConfig]) -> None:
+    """Valida que pelo menos um estabelecimento está completamente configurado."""
+    if not establishments:
         raise EnvironmentError(
-            f"Variáveis de ambiente obrigatórias não encontradas: {missing}\n"
-            "Defina-as no arquivo .env antes de executar o worker."
+            "Nenhum estabelecimento configurado no .env.\n"
+            "Defina ao menos um bloco com prefixo (ex: COBRANCA_INTEGRATION_ID, "
+            "COBRANCA_ESTABLISHMENT_ID, COBRANCA_ACCESS_TOKEN, COBRANCA_BLOCKED_CLIENT_ID)."
+        )
+
+    ready = [e for e in establishments if e.is_ready]
+    if not ready:
+        details = []
+        for e in establishments:
+            missing = []
+            if not e.integration_id:    missing.append(f"{e.prefix}_INTEGRATION_ID")
+            if not e.establishment_id:  missing.append(f"{e.prefix}_ESTABLISHMENT_ID")
+            if not e.token:             missing.append(f"{e.prefix}_ACCESS_TOKEN")
+            if not e.blocked_client_id: missing.append(f"{e.prefix}_BLOCKED_CLIENT_ID")
+            details.append(f"  {e.label}: faltam {missing}")
+        raise EnvironmentError(
+            "Nenhum estabelecimento está completamente configurado:\n"
+            + "\n".join(details)
+            + "\nPreencha pelo menos um bloco completo no .env."
         )
 
 
 def main() -> None:
-    _validate_env()
+    # 1. Inicializa o banco de dados (cria tabelas se necessário)
+    log.info("Inicializando banco de dados...")
+    init_db()
+
+    # 2. Carrega e valida estabelecimentos
+    establishments = load_establishments()
+    _validate_env(establishments)
+
+    # 3. Inicia servidor API em thread daemon
+    api_thread = threading.Thread(target=_start_api_server, daemon=True)
+    api_thread.start()
+
+    # 4. Roda o worker na thread principal (bloqueia até Ctrl+C)
     try:
-        run_monitor()
+        run_monitor(establishments)
     except KeyboardInterrupt:
         log.info("Monitoramento encerrado pelo usuário.")
 
