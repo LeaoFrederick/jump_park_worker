@@ -489,20 +489,35 @@ def main() -> None:
     api_thread = threading.Thread(target=_start_api_server, daemon=True)
     api_thread.start()
 
+    # Notificação de inicialização com sucesso no Discord
+    ready_labels = [e.label for e in establishments if e.is_ready]
+    msg_startup = (
+        "🟢 **JUMP PARK WORKER — INICIADO COM SUCESSO** 🟢\n"
+        f"- **Estabelecimentos:** {', '.join(ready_labels)}\n"
+        f"- **API FastAPI:** `http://{API_HOST}:{API_PORT}`\n"
+        f"- **Intervalo de Polling:** `{POLLING_INTERVAL}s` | **Janela OS:** `{WINDOW_DAYS}d`\n"
+        f"- **Status:** Monitoramento ativo e persistência no MySQL"
+    )
+    alertar_discord(msg_startup)
+
     # 4. Roda o worker na thread principal (bloqueia até Ctrl+C)
     try:
         run_monitor(establishments)
     except KeyboardInterrupt:
         log.info("Monitoramento encerrado pelo usuário.")
+        alertar_discord("🟡 **JUMP PARK WORKER — INTERROMPIDO** 🟡\nO serviço foi encerrado manualmente pelo operador (SIGINT / KeyboardInterrupt).")
 
 
 if __name__ == "__main__":
     try:
         main()
+    except KeyboardInterrupt:
+        pass
     except Exception as e:
         erro = traceback.format_exc()
         alertar_discord(
-            f"🚨 **ALERTA CRÍTICO - JUMP PARK WORKER** 🚨\n"
+            f"🚨 **ALERTA CRÍTICO — JUMP PARK WORKER DERRUBADO** 🚨\n"
+            f"O processo foi finalizado por um erro inesperado:\n"
             f"```python\n{erro}\n```"
         )
         raise e

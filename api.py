@@ -232,7 +232,7 @@ def bloquear(payload: ActionRequest):
     # Registra no banco se ao menos um estabelecimento teve sucesso
     evento_id = None
     if sucesso_em:
-        registro = registrar_evento(
+        evento_id = registrar_evento(
             evento="BLOQUEIO",
             metodo="MANUAL",
             autor=payload.autor,
@@ -242,8 +242,6 @@ def bloquear(payload: ActionRequest):
             estabelecimento_origem="WEBAPP",
             estabelecimentos_afetados=", ".join(sucesso_em),
         )
-        if registro:
-            evento_id = registro.id
 
     # Determina status geral da resposta
     total_ok = len(sucesso_em)
@@ -291,7 +289,7 @@ def desbloquear(payload: ActionRequest):
     # Registra no banco se ao menos um estabelecimento teve sucesso
     evento_id = None
     if sucesso_em:
-        registro = registrar_evento(
+        evento_id = registrar_evento(
             evento="DESBLOQUEIO",
             metodo="MANUAL",
             autor=payload.autor,
@@ -301,8 +299,6 @@ def desbloquear(payload: ActionRequest):
             estabelecimento_origem="WEBAPP",
             estabelecimentos_afetados=", ".join(sucesso_em),
         )
-        if registro:
-            evento_id = registro.id
 
     # Determina status geral
     total_ok = len(sucesso_em)
@@ -341,7 +337,7 @@ def criar_evento(payload: EventoRequest):
                    f'recebido: "{payload.evento}"',
         )
 
-    registro = registrar_evento(
+    evento_id = registrar_evento(
         evento=payload.evento,
         metodo=payload.metodo,
         autor=payload.autor,
@@ -357,7 +353,7 @@ def criar_evento(payload: EventoRequest):
         timestamp=payload.timestamp,
     )
 
-    if registro is None:
+    if evento_id is None:
         raise HTTPException(
             status_code=500,
             detail="Falha ao gravar evento no banco de dados. Verifique os logs.",
@@ -365,7 +361,7 @@ def criar_evento(payload: EventoRequest):
 
     return EventoResponse(
         message=f"Evento {payload.evento} registrado para placa {payload.placa}.",
-        evento_id=registro.id,
+        evento_id=evento_id,
     )
 
 

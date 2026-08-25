@@ -153,12 +153,12 @@ def registrar_evento(
     status_financeiro: str | None = None,
     exit_datetime: datetime | None = None,
     timestamp: datetime | None = None,
-) -> Evento | None:
+) -> int | None:
     """
     Insere um evento de bloqueio ou desbloqueio no banco.
 
-    Retorna o objeto Evento criado, ou None se houve erro
-    (para não interromper o worker por falha de persistência).
+    Retorna o ID (int) do Evento criado, ou None se houve erro
+    (para não interromper o worker por falha de persistência e evitar DetachedInstanceError).
     """
     try:
         registro = Evento(
@@ -182,9 +182,10 @@ def registrar_evento(
                 "[DB] Evento registrado: %s | %s | placa=%s | metodo=%s | origem=%s",
                 evento, placa, placa, metodo, estabelecimento_origem,
             )
-            # Flush para obter o ID antes do commit (commit é feito pelo context manager)
+            # Flush para gerar e obter o ID antes do commit
             session.flush()
-            return registro
+            evento_id = registro.id
+            return evento_id
     except Exception as exc:
         log.error("[DB] Falha ao registrar evento: %s", exc)
         return None
