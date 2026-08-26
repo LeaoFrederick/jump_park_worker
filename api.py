@@ -16,8 +16,9 @@ import logging
 from datetime import datetime
 
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from database import registrar_evento
@@ -42,6 +43,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Captura qualquer exceção não tratada na API para evitar travamentos silenciosos da thread."""
+    log.error(f"Erro interno não tratado na rota {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "message": "Erro interno inesperado no servidor."}
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -133,21 +143,40 @@ def _block_vehicle_on_establishment(config, plate: str) -> dict:
                     "[BLOCK][%s] Placa %s vinculada ao CARRO BLOQUEADO com sucesso.",
                     config.label, plate,
                 )
-                return {"estabelecimento": config.label, "status": "ok", "detail": "Placa bloqueada"}
+                return {"estabelecimento": config.label, "status": "ok", "detail": "Placa bloqueada com sucesso"}
             else:
                 detail = data.get("data", {})
                 msg = detail.get("msg", str(detail)) if isinstance(detail, dict) else str(detail)
+                is_already = any(k in msg.lower() for k in ["já cadastrado", "ja cadastrado", "já existe", "ja existe", "duplicad", "already", "vinculad"])
+                if is_already:
+                    log.warning("[BLOCK][%s] Placa %s já está vinculada ao CARRO BLOQUEADO: %s", config.label, plate, msg)
+                    return {"estabelecimento": config.label, "status": "already_blocked", "detail": f"Placa já cadastrada ({msg})"}
                 log.warning("[BLOCK][%s] Resposta inesperada para %s: %s", config.label, plate, msg)
                 return {"estabelecimento": config.label, "status": "warning", "detail": msg}
 
+        # Tratamento de status codes diferentes de 200 (ex: 400, 409, 422)
+        try:
+            data = response.json()
+            detail = data.get("data", {})
+            msg = detail.get("msg", str(detail)) if isinstance(detail, dict) else (data.get("message") or response.text[:200])
+        except Exception:
+            msg = response.text[:200]
+
+        is_already = response.status_code in (400, 409, 422) and any(
+            k in msg.lower() for k in ["já cadastrado", "ja cadastrado", "já existe", "ja existe", "duplicad", "already", "vinculad"]
+        )
+        if is_already:
+            log.warning("[BLOCK][%s] Placa %s já está vinculada ao CARRO BLOQUEADO: %s", config.label, plate, msg)
+            return {"estabelecimento": config.label, "status": "already_blocked", "detail": f"Placa já cadastrada ({msg})"}
+
         log.error(
             "[BLOCK][%s] Falha ao bloquear %s: HTTP %s — %s",
-            config.label, plate, response.status_code, response.text[:300],
+            config.label, plate, response.status_code, msg,
         )
         return {
             "estabelecimento": config.label,
             "status": "error",
-            "detail": f"HTTP {response.status_code}: {response.text[:200]}",
+            "detail": f"HTTP {response.status_code}: {msg}",
         }
     except requests.exceptions.RequestException as exc:
         log.error("[BLOCK][%s] Exceção ao bloquear %s: %s", config.label, plate, exc)
@@ -170,20 +199,48 @@ def _unblock_vehicle_on_establishment(config, plate: str) -> dict:
     try:
         response = requests.delete(url, headers=_build_headers(config), timeout=10)
         if response.status_code == 200:
+            try:
+                data = response.json()
+                if data.get("response") == "error":
+                    detail = data.get("data", {})
+                    msg = detail.get("msg", str(detail)) if isinstance(detail, dict) else str(detail)
+                    is_not_found = any(k in msg.lower() for k in ["não encontrad", "nao encontrad", "inexistente", "not found", "não existe", "nao existe"])
+                    if is_not_found:
+                        log.warning("[UNBLOCK][%s] Placa %s não encontrada para desbloqueio: %s", config.label, plate, msg)
+                        return {"estabelecimento": config.label, "status": "not_found", "detail": "Placa não estava bloqueada neste estabelecimento"}
+                    log.warning("[UNBLOCK][%s] Resposta inesperada ao desbloquear %s: %s", config.label, plate, msg)
+                    return {"estabelecimento": config.label, "status": "warning", "detail": msg}
+            except Exception:
+                pass
+
             log.info(
                 "[UNBLOCK][%s] Placa %s removida do CARRO BLOQUEADO com sucesso.",
                 config.label, plate,
             )
-            return {"estabelecimento": config.label, "status": "ok", "detail": "Placa desbloqueada"}
+            return {"estabelecimento": config.label, "status": "ok", "detail": "Placa desbloqueada com sucesso"}
+
+        try:
+            data = response.json()
+            detail = data.get("data", {})
+            msg = detail.get("msg", str(detail)) if isinstance(detail, dict) else (data.get("message") or response.text[:200])
+        except Exception:
+            msg = response.text[:200]
+
+        is_not_found = response.status_code == 404 or any(
+            k in msg.lower() for k in ["não encontrad", "nao encontrad", "inexistente", "not found", "não existe", "nao existe"]
+        )
+        if is_not_found:
+            log.warning("[UNBLOCK][%s] Placa %s não encontrada na lista de bloqueados: %s", config.label, plate, msg)
+            return {"estabelecimento": config.label, "status": "not_found", "detail": "Placa não estava bloqueada neste estabelecimento"}
 
         log.error(
             "[UNBLOCK][%s] Falha ao desbloquear %s: HTTP %s — %s",
-            config.label, plate, response.status_code, response.text[:300],
+            config.label, plate, response.status_code, msg,
         )
         return {
             "estabelecimento": config.label,
             "status": "error",
-            "detail": f"HTTP {response.status_code}: {response.text[:200]}",
+            "detail": f"HTTP {response.status_code}: {msg}",
         }
     except requests.exceptions.RequestException as exc:
         log.error("[UNBLOCK][%s] Exceção ao desbloquear %s: %s", config.label, plate, exc)
@@ -222,12 +279,18 @@ def bloquear(payload: ActionRequest):
     ready = _get_ready_establishments()
     resultados = []
     sucesso_em = []
+    ja_bloqueada_em = []
+    falha_em = []
 
     for config in ready:
         resultado = _block_vehicle_on_establishment(config, plate)
         resultados.append(resultado)
         if resultado["status"] == "ok":
             sucesso_em.append(config.label)
+        elif resultado["status"] == "already_blocked":
+            ja_bloqueada_em.append(config.label)
+        else:
+            falha_em.append(f"{config.label} ({resultado.get('detail', 'Erro')})")
 
     # Registra no banco se ao menos um estabelecimento teve sucesso
     evento_id = None
@@ -243,19 +306,36 @@ def bloquear(payload: ActionRequest):
             estabelecimentos_afetados=", ".join(sucesso_em),
         )
 
-    # Determina status geral da resposta
-    total_ok = len(sucesso_em)
     total = len(ready)
-
-    if total_ok == total:
+    if len(sucesso_em) == total:
         status = "ok"
-        message = f"Placa {plate} bloqueada em {total_ok}/{total} estabelecimento(s)."
-    elif total_ok > 0:
+        message = f"Placa {plate} bloqueada com sucesso em todos os {total} estabelecimento(s)."
+        log.info("[BLOCK] Placa %s bloqueada com sucesso em todos os estabelecimentos por %s.", plate, payload.autor)
+    elif len(ja_bloqueada_em) == total:
+        status = "already_blocked"
+        message = f"A placa {plate} já está cadastrada como bloqueada em todos os estabelecimentos."
+        log.warning("[BLOCK] Tentativa de bloqueio para placa %s que já estava bloqueada em todos os estabelecimentos (%s). Operador: %s", plate, ", ".join(ja_bloqueada_em), payload.autor)
+    elif len(sucesso_em) > 0:
         status = "partial"
-        message = f"Placa {plate} bloqueada em {total_ok}/{total} estabelecimento(s). Verifique detalhes."
+        partes = []
+        if sucesso_em:
+            partes.append(f"Bloqueada em: {', '.join(sucesso_em)}")
+        if ja_bloqueada_em:
+            partes.append(f"Já constava bloqueada em: {', '.join(ja_bloqueada_em)}")
+        if falha_em:
+            partes.append(f"Falhas: {', '.join(falha_em)}")
+        message = f"Placa {plate} processada: " + " | ".join(partes)
+        log.info("[BLOCK] Placa %s processada parcialmente por %s: %s", plate, payload.autor, message)
+    elif len(ja_bloqueada_em) > 0:
+        status = "already_blocked"
+        message = f"A placa {plate} já constava como bloqueada em: {', '.join(ja_bloqueada_em)}."
+        if falha_em:
+            message += f" (Falhas nos demais: {', '.join(falha_em)})"
+        log.warning("[BLOCK] Placa %s já constava bloqueada por %s: %s", plate, payload.autor, message)
     else:
         status = "error"
-        message = f"Falha ao bloquear placa {plate} em todos os estabelecimentos."
+        message = f"Falha ao bloquear placa {plate} nos estabelecimentos: {', '.join(falha_em)}"
+        log.error("[BLOCK] Falha total ao bloquear placa %s por %s: %s", plate, payload.autor, message)
 
     return ActionResponse(
         status=status,
@@ -279,12 +359,18 @@ def desbloquear(payload: ActionRequest):
     ready = _get_ready_establishments()
     resultados = []
     sucesso_em = []
+    nao_encontrada_em = []
+    falha_em = []
 
     for config in ready:
         resultado = _unblock_vehicle_on_establishment(config, plate)
         resultados.append(resultado)
         if resultado["status"] == "ok":
             sucesso_em.append(config.label)
+        elif resultado["status"] == "not_found":
+            nao_encontrada_em.append(config.label)
+        else:
+            falha_em.append(f"{config.label} ({resultado.get('detail', 'Erro')})")
 
     # Registra no banco se ao menos um estabelecimento teve sucesso
     evento_id = None
@@ -300,19 +386,36 @@ def desbloquear(payload: ActionRequest):
             estabelecimentos_afetados=", ".join(sucesso_em),
         )
 
-    # Determina status geral
-    total_ok = len(sucesso_em)
     total = len(ready)
-
-    if total_ok == total:
+    if len(sucesso_em) == total:
         status = "ok"
-        message = f"Placa {plate} desbloqueada em {total_ok}/{total} estabelecimento(s)."
-    elif total_ok > 0:
+        message = f"Placa {plate} desbloqueada com sucesso em todos os {total} estabelecimento(s)."
+        log.info("[UNBLOCK] Placa %s desbloqueada com sucesso em todos os estabelecimentos por %s.", plate, payload.autor)
+    elif len(nao_encontrada_em) == total:
+        status = "not_found"
+        message = f"A placa {plate} não foi encontrada na lista de bloqueados de nenhum estabelecimento."
+        log.warning("[UNBLOCK] Tentativa de desbloqueio para placa %s que não constava bloqueada em nenhum estabelecimento. Operador: %s", plate, payload.autor)
+    elif len(sucesso_em) > 0:
         status = "partial"
-        message = f"Placa {plate} desbloqueada em {total_ok}/{total} estabelecimento(s). Verifique detalhes."
+        partes = []
+        if sucesso_em:
+            partes.append(f"Desbloqueada em: {', '.join(sucesso_em)}")
+        if nao_encontrada_em:
+            partes.append(f"Não constava bloqueada em: {', '.join(nao_encontrada_em)}")
+        if falha_em:
+            partes.append(f"Falhas: {', '.join(falha_em)}")
+        message = f"Placa {plate} processada: " + " | ".join(partes)
+        log.info("[UNBLOCK] Placa %s processada parcialmente por %s: %s", plate, payload.autor, message)
+    elif len(nao_encontrada_em) > 0:
+        status = "not_found"
+        message = f"A placa {plate} não constava como bloqueada em: {', '.join(nao_encontrada_em)}."
+        if falha_em:
+            message += f" (Falhas nos demais: {', '.join(falha_em)})"
+        log.warning("[UNBLOCK] Placa %s não constava bloqueada por %s: %s", plate, payload.autor, message)
     else:
         status = "error"
-        message = f"Falha ao desbloquear placa {plate} em todos os estabelecimentos."
+        message = f"Falha ao desbloquear placa {plate} nos estabelecimentos: {', '.join(falha_em)}"
+        log.error("[UNBLOCK] Falha total ao desbloquear placa %s por %s: %s", plate, payload.autor, message)
 
     return ActionResponse(
         status=status,

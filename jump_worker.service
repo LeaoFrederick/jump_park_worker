@@ -1,0 +1,26 @@
+[Unit]
+Description=Jump Park Worker (Monitor & API)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/jump_park_worker
+Environment="PATH=/home/ubuntu/jump_park_worker/.venv/bin:/usr/bin"
+# Carrega as variáveis do .env caso precise (opcional, o script já lê com python-dotenv)
+# EnvironmentFile=/home/ubuntu/jump_park_worker/.env
+
+ExecStart=/home/ubuntu/jump_park_worker/.venv/bin/python main.py
+
+# Resiliência: Reinicia sempre em caso de falhas ou encerramentos
+Restart=always
+# Aguarda 5 segundos antes de reiniciar para evitar throttling
+RestartSec=5
+
+# Logs (Redireciona stdout e stderr para o arquivo)
+StandardOutput=append:/var/log/jumppark.log
+StandardError=append:/var/log/jumppark.log
+
+[Install]
+WantedBy=multi-user.target
