@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 
 # ============================================================
 #  JumpPark Worker — Setup na VM Oracle
@@ -72,5 +72,7 @@ echo "    source .venv/bin/activate"
 echo "    python main.py"
 echo ""
 echo "  Para configurar como serviço (24/7):"
-echo "    Execute: sudo bash setup_service.sh"
+echo "    sudo cp deploy/jump_worker.service /etc/systemd/system/"
+echo "    sudo systemctl daemon-reload"
+echo "    sudo systemctl enable --now jump_worker"
 echo "=================================================="

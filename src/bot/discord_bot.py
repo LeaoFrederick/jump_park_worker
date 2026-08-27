@@ -1,5 +1,5 @@
 """
-jump_park_worker/discord_bot.py
+src/bot/discord_bot.py
 Bot do Discord interativo para monitoramento e controle remoto do Jump Park Worker.
 
 Comandos disponíveis (via Slash / e Prefixo !):
@@ -9,8 +9,6 @@ Comandos disponíveis (via Slash / e Prefixo !):
   - /desbloquear <placa> [motivo]— Desbloqueia veículo em todas as unidades
   - /eventos [limite]            — Consulta os últimos eventos registrados no MySQL
   - /ajuda ou !ajuda            — Guia de uso dos comandos
-
-Roda em thread daemon independente com asyncio event loop próprio.
 """
 
 import asyncio
@@ -21,6 +19,26 @@ from datetime import datetime
 import discord
 from discord import app_commands
 from discord.ext import commands
+
+from src.bot.notifications import (
+    notificar_desbloqueio,
+    register_bot_instance,
+)
+from src.config import (
+    CACHE_DURATION,
+    DISCORD_BOT_TOKEN,
+    DISCORD_NOTIFICATION_CHANNEL_ID,
+    POLLING_INTERVAL,
+    TAXA_VALOR,
+    WINDOW_DAYS,
+    get_ready_establishments,
+)
+from src.core.jumppark_client import (
+    block_vehicle_on_establishment,
+    get_blocked_plates,
+    unblock_vehicle_on_establishment,
+)
+from src.database import Evento, get_session, registrar_evento
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +55,7 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 @bot.event
 async def on_ready():
+    register_bot_instance(bot)
     log.info("[DISCORD BOT] Conectado como %s (ID: %s)", bot.user, bot.user.id)
     try:
         synced = await bot.tree.sync()
@@ -57,17 +76,7 @@ async def on_ready():
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _get_worker_status_embed() -> discord.Embed:
-    from main import (
-        CACHE_DURATION,
-        POLLING_INTERVAL,
-        TAXA_VALOR,
-        WINDOW_DAYS,
-        get_blocked_plates,
-        load_establishments,
-    )
-
-    establishments = load_establishments()
-    ready = [e for e in establishments if e.is_ready]
+    ready = get_ready_establishments()
 
     embed = discord.Embed(
         title="🟢 Status do Jump Park Worker",
@@ -107,10 +116,7 @@ def _get_worker_status_embed() -> discord.Embed:
 
 
 def _get_plates_embed() -> discord.Embed:
-    from main import get_blocked_plates, load_establishments
-
-    establishments = load_establishments()
-    ready = [e for e in establishments if e.is_ready]
+    ready = get_ready_establishments()
 
     embed = discord.Embed(
         title="🚗 Placas Atualmente Bloqueadas",
@@ -149,9 +155,6 @@ def _get_plates_embed() -> discord.Embed:
 
 
 def _exec_bloqueio(plate: str, reason: str, author_name: str) -> discord.Embed:
-    from api import _block_vehicle_on_establishment, _get_ready_establishments
-    from database import registrar_evento
-
     plate = plate.upper().strip()
     if len(plate) < 7:
         return discord.Embed(
@@ -160,12 +163,11 @@ def _exec_bloqueio(plate: str, reason: str, author_name: str) -> discord.Embed:
             color=discord.Color.red(),
         )
 
-    try:
-        ready = _get_ready_establishments()
-    except Exception as e:
+    ready = get_ready_establishments()
+    if not ready:
         return discord.Embed(
             title="❌ Erro de Configuração",
-            description=str(e),
+            description="Nenhum estabelecimento ativo configurado.",
             color=discord.Color.red(),
         )
 
@@ -174,7 +176,7 @@ def _exec_bloqueio(plate: str, reason: str, author_name: str) -> discord.Embed:
     falha_em = []
 
     for cfg in ready:
-        res = _block_vehicle_on_establishment(cfg, plate)
+        res = block_vehicle_on_establishment(cfg, plate)
         if res["status"] == "ok":
             sucesso_em.append(cfg.label)
         elif res["status"] == "already_blocked":
@@ -230,9 +232,6 @@ def _exec_bloqueio(plate: str, reason: str, author_name: str) -> discord.Embed:
 
 
 def _exec_desbloqueio(plate: str, reason: str, author_name: str) -> discord.Embed:
-    from api import _get_ready_establishments, _unblock_vehicle_on_establishment
-    from database import registrar_evento
-
     plate = plate.upper().strip()
     if len(plate) < 7:
         return discord.Embed(
@@ -241,12 +240,11 @@ def _exec_desbloqueio(plate: str, reason: str, author_name: str) -> discord.Embe
             color=discord.Color.red(),
         )
 
-    try:
-        ready = _get_ready_establishments()
-    except Exception as e:
+    ready = get_ready_establishments()
+    if not ready:
         return discord.Embed(
             title="❌ Erro de Configuração",
-            description=str(e),
+            description="Nenhum estabelecimento ativo configurado.",
             color=discord.Color.red(),
         )
 
@@ -255,7 +253,7 @@ def _exec_desbloqueio(plate: str, reason: str, author_name: str) -> discord.Embe
     falha_em = []
 
     for cfg in ready:
-        res = _unblock_vehicle_on_establishment(cfg, plate)
+        res = unblock_vehicle_on_establishment(cfg, plate)
         if res["status"] == "ok":
             sucesso_em.append(cfg.label)
         elif res["status"] == "not_found":
@@ -311,8 +309,6 @@ def _exec_desbloqueio(plate: str, reason: str, author_name: str) -> discord.Embe
 
 
 def _get_recent_events_embed(limit: int = 5) -> discord.Embed:
-    from database import Evento, get_session
-
     limit = min(max(1, limit), 15)
 
     embed = discord.Embed(
@@ -500,7 +496,7 @@ async def cmd_ajuda(ctx: commands.Context):
 
 def start_discord_bot() -> None:
     """Inicia o Bot do Discord em loop de eventos próprio."""
-    token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
+    token = DISCORD_BOT_TOKEN
     if not token:
         log.info("[DISCORD BOT] DISCORD_BOT_TOKEN não configurado no .env. Bot interativo desativado.")
         return

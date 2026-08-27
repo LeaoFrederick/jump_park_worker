@@ -1,5 +1,5 @@
 """
-find_blocked_client_id.py
+scripts/find_blocked_client_id.py
 
 Script utilitário para consultar o endpoint de clientes dos estabelecimentos
 CANAL e PRINCIPAL na API Jump Park e localizar o clientId correspondente ao
@@ -10,7 +10,7 @@ O resultado pode ser copiado diretamente para o .env nos campos:
   PRINCIPAL_BLOCKED_CLIENT_ID=...
 
 Uso:
-  python find_blocked_client_id.py
+  python scripts/find_blocked_client_id.py
 """
 
 import json
@@ -18,13 +18,14 @@ import logging
 import os
 import socket
 import sys
-
+from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Logging
-# ──────────────────────────────────────────────────────────────────────────────
+# Garante que o .env na raiz do projeto seja carregado
+ROOT_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(ROOT_DIR / ".env")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -32,14 +33,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Carrega .env
-# ──────────────────────────────────────────────────────────────────────────────
-load_dotenv()
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Patch IPv4-only (mesmo patch do main.py — necessário para a whitelist da API)
-# ──────────────────────────────────────────────────────────────────────────────
+# Patch IPv4-only
 _original_getaddrinfo = socket.getaddrinfo
 
 
@@ -52,37 +46,21 @@ def _getaddrinfo_ipv4_only(*args, **kwargs):
 
 
 socket.getaddrinfo = _getaddrinfo_ipv4_only
-log.debug("Patch IPv4-only aplicado.")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Constantes
-# ──────────────────────────────────────────────────────────────────────────────
 BASE_URL = "https://new-web.jumpparkapi.com.br"
 BLOCKED_CLIENT_NAME = "CARRO BLOQUEADO"
 
-# Estabelecimentos a pesquisar
 TARGETS = [
-    {
-        "label": "CANAL",
-        "prefix": "CANAL",
-    },
-    {
-        "label": "PRINCIPAL",
-        "prefix": "PRINCIPAL",
-    },
+    {"label": "CANAL", "prefix": "CANAL"},
+    {"label": "PRINCIPAL", "prefix": "PRINCIPAL"},
 ]
 
-# Headers padrão (mesmo User-Agent do main.py para evitar bloqueio do Cloudflare)
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/124.0.0.0 Safari/537.36"
 )
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Funções auxiliares
-# ──────────────────────────────────────────────────────────────────────────────
 
 def build_headers(token: str, origin: str = "") -> dict:
     """Monta os headers HTTP para uma requisição à API Jump Park."""
@@ -104,23 +82,13 @@ def fetch_clients_page(
     per_page: int = 50,
 ) -> dict | None:
     """Busca uma página do endpoint GET /clients."""
-    url = (
-        f"{BASE_URL}/api/{integration_id}"
-        f"/public/establishment/{establishment_id}"
-        "/clients"
-    )
-    params = {
-        "page": page,
-        "perPage": per_page,
-    }
+    url = f"{BASE_URL}/api/{integration_id}/public/establishment/{establishment_id}/clients"
+    params = {"page": page, "perPage": per_page}
     try:
         resp = requests.get(url, headers=headers, params=params, timeout=15)
         if resp.status_code == 200:
             return resp.json()
-        log.error(
-            "  Erro HTTP %s ao buscar clientes (página %d). Resposta: %s",
-            resp.status_code, page, resp.text[:300],
-        )
+        log.error("  Erro HTTP %s ao buscar clientes (página %d). Resposta: %s", resp.status_code, page, resp.text[:300])
     except requests.exceptions.RequestException as exc:
         log.error("  Exceção na requisição (página %d): %s", page, exc)
     return None
@@ -142,13 +110,10 @@ def find_blocked_client(
 
     while True:
         log.info("  Buscando página %d...", page)
-        data = fetch_clients_page(
-            integration_id, establishment_id, headers, page=page
-        )
+        data = fetch_clients_page(integration_id, establishment_id, headers, page=page)
         if data is None:
             break
 
-        # A resposta pode ter a lista em "content" (raiz) ou em "data.content"
         content = data.get("content") or data.get("data", {}).get("content", [])
         if not content:
             log.info("  Página %d vazia — fim da lista.", page)
@@ -161,10 +126,7 @@ def find_blocked_client(
 
         last_page = data.get("lastPage", page)
         total = data.get("total", "?")
-        log.info(
-            "  Página %d/%s — %d clientes nesta página, %s total(is).",
-            page, last_page, len(content), total,
-        )
+        log.info("  Página %d/%s — %d clientes nesta página, %s total(is).", page, last_page, len(content), total)
 
         if page >= last_page:
             break
@@ -172,10 +134,6 @@ def find_blocked_client(
 
     return found
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Execução principal
-# ──────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     log.info("=" * 70)
@@ -217,7 +175,6 @@ def main() -> None:
                 log.info("     → clientId: %s  |  name: %s", client_id, name)
                 results[prefix] = client_id
 
-            # Mostra o JSON completo para verificação
             log.info("")
             log.info("  JSON completo dos clientes encontrados:")
             print(json.dumps(matches, indent=2, ensure_ascii=False))
@@ -226,12 +183,7 @@ def main() -> None:
                 "  ⚠ Nenhum cliente com nome '%s' encontrado no estabelecimento %s (%s).",
                 BLOCKED_CLIENT_NAME, label, establishment_id,
             )
-            log.info(
-                "  Verifique se o cliente 'CARRO BLOQUEADO' já foi criado neste "
-                "estabelecimento. Pode ser necessário criá-lo manualmente primeiro."
-            )
 
-    # ── Resumo final com valores para copiar para o .env ─────────────────
     log.info("")
     log.info("=" * 70)
     log.info("RESUMO — Copie para o .env:")
