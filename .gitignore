@@ -181,3 +181,6 @@ cython_debug/
 .cursorindexingignore
 # Arquivo local com dados da VM Oracle
 oracle-vm.md
+
+# Arquivos do front-end Google Apps Script (gerenciados separadamente)
+front_apps_script/

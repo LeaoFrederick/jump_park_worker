@@ -20,6 +20,8 @@ from src.core.jumppark_client import (
     unblock_vehicle_on_establishment,
 )
 from src.database import registrar_evento
+from src.database.connection import get_session
+from src.database.models import Evento
 
 log = logging.getLogger(__name__)
 
@@ -266,3 +268,39 @@ def criar_evento(payload: EventoRequest):
 def health():
     """Healthcheck simples — confirma que a API está respondendo."""
     return {"status": "ok", "service": "jump_park_worker_api"}
+
+
+@app.get("/api/historico")
+def listar_historico(limite: int = 50):
+    """
+    Retorna os últimos eventos registrados no banco de dados.
+    Suporta o parâmetro opcional `limite` (padrão: 50, máximo: 200).
+    """
+    limite = min(max(1, limite), 200)  # garante entre 1 e 200
+    try:
+        with get_session() as session:
+            eventos = (
+                session.query(Evento)
+                .order_by(Evento.timestamp.desc())
+                .limit(limite)
+                .all()
+            )
+            return [
+                {
+                    "id": e.id,
+                    "timestamp": e.timestamp.strftime("%d/%m/%Y %H:%M:%S") if e.timestamp else None,
+                    "evento": e.evento,
+                    "metodo": e.metodo,
+                    "autor": e.autor,
+                    "motivo": e.motivo,
+                    "placa": e.placa,
+                    "estabelecimento_origem": e.estabelecimento_origem,
+                    "estabelecimentos_afetados": e.estabelecimentos_afetados,
+                    "valor_taxa": e.valor_taxa,
+                    "status_financeiro": e.status_financeiro,
+                }
+                for e in eventos
+            ]
+    except Exception as exc:
+        log.error("[HISTORICO] Erro ao consultar eventos: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro ao consultar o histórico de eventos.")
