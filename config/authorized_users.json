@@ -14,8 +14,16 @@
       "name": "Francisco"
     },
     {
-      "email": "diretoria@iescursos.com.br",
+      "email": "diretoria@falves.com.br",
       "name": "Diretoria F Alves"
+    },
+    {
+      "email": "caio@falves.com",
+      "name": "Caio"
+    },
+    {
+      "email": "iago@falves.com",
+      "name": "Iago"
     }
   ]
 }
