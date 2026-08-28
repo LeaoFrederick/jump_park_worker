@@ -5,11 +5,20 @@ Aplicação FastAPI e definição dos endpoints HTTP.
 
 import logging
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from src.api.auth import (
+    create_session_token,
+    get_current_user,
+    get_google_client_id,
+    is_email_authorized,
+    load_auth_config,
+    verify_google_token,
+)
 from src.api.schemas import (
     ActionRequest,
     ActionResponse,
@@ -84,11 +93,66 @@ def _get_ready_configs():
     return ready
 
 
+class GoogleAuthPayload(BaseModel):
+    credential: str
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Rotas — Autenticação Google & Permissões
+# ──────────────────────────────────────────────────────────────────────────────
+@app.get("/api/auth/config")
+def auth_config():
+    """Retorna as configurações públicas de autenticação Google."""
+    client_id = get_google_client_id()
+    cfg = load_auth_config()
+    authorized_list = cfg.get("authorized_emails", [])
+    return {
+        "auth_enabled": bool(client_id or authorized_list),
+        "google_client_id": client_id,
+    }
+
+
+@app.post("/api/auth/google")
+def auth_google(payload: GoogleAuthPayload):
+    """
+    Valida a credencial Google (ID token), verifica se o e-mail
+    consta na whitelist de authorized_users.json e retorna a sessão.
+    """
+    user_info = verify_google_token(payload.credential)
+    if not user_info:
+        raise HTTPException(
+            status_code=400,
+            detail="Credencial do Google inválida ou expirada. Tente novamente.",
+        )
+
+    email = user_info["email"]
+    if not is_email_authorized(email):
+        log.warning("[AUTH] Tentativa de acesso bloqueada para e-mail não autorizado: %s", email)
+        raise HTTPException(
+            status_code=403,
+            detail=f"O e-mail '{email}' não está autorizado a acessar este painel. Solicite permissão ao administrador.",
+        )
+
+    token = create_session_token(user_info)
+    log.info("[AUTH] Usuário %s (%s) logado com sucesso.", user_info["name"], email)
+    return {
+        "status": "ok",
+        "token": token,
+        "user": user_info,
+    }
+
+
+@app.get("/api/auth/me")
+def auth_me(user: dict = Depends(get_current_user)):
+    """Retorna os dados do operador atualmente autenticado."""
+    return user
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Rotas — Bloqueio / Desbloqueio
 # ──────────────────────────────────────────────────────────────────────────────
 @app.post("/api/bloquear", response_model=ActionResponse)
-def bloquear(payload: ActionRequest):
+def bloquear(payload: ActionRequest, user: dict = Depends(get_current_user)):
     """
     Bloqueia uma placa em TODOS os estabelecimentos ativos.
     Vincula a placa ao cliente 'CARRO BLOQUEADO' via API Jump Park
@@ -168,7 +232,7 @@ def bloquear(payload: ActionRequest):
 
 
 @app.post("/api/desbloquear", response_model=ActionResponse)
-def desbloquear(payload: ActionRequest):
+def desbloquear(payload: ActionRequest, user: dict = Depends(get_current_user)):
     """
     Desbloqueia uma placa em TODOS os estabelecimentos ativos.
     Remove a placa do cliente 'CARRO BLOQUEADO' via API Jump Park
@@ -248,7 +312,7 @@ def desbloquear(payload: ActionRequest):
 
 
 @app.post("/api/eventos", response_model=EventoResponse, status_code=201)
-def criar_evento(payload: EventoRequest):
+def criar_evento(payload: EventoRequest, user: dict = Depends(get_current_user)):
     """Registra um evento de bloqueio ou desbloqueio no banco de dados."""
     if payload.evento not in ("BLOQUEIO", "DESBLOQUEIO"):
         raise HTTPException(
@@ -291,7 +355,7 @@ def health():
 
 
 @app.get("/api/historico")
-def listar_historico(limite: int = 50):
+def listar_historico(limite: int = 50, user: dict = Depends(get_current_user)):
     """
     Retorna os últimos eventos registrados no banco de dados.
     Suporta o parâmetro opcional `limite` (padrão: 50, máximo: 200).

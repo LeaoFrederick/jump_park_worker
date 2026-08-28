@@ -1,0 +1,10 @@
+{
+  "_comentario": "Configure aqui os e-mails com permissão de acesso ao Painel Jump Park e o Google Client ID",
+  "google_client_id": "",
+  "authorized_emails": [
+    "srross123@gmail.com",
+    "frederickleao123@gmail.com",
+    "franciscoqueirozz@gmail.com",
+    "diretoria@iescursos.com.br"
+  ]
+}
