@@ -1,10 +1,25 @@
 {
-  "_comentario": "Configure aqui os e-mails com permissão de acesso ao Painel Jump Park e o Google Client ID",
-  "google_client_id": "",
-  "authorized_emails": [
-    "srross123@gmail.com",
-    "frederickleao123@gmail.com",
-    "franciscoqueirozz@gmail.com",
-    "diretoria@iescursos.com.br"
+  "_comentario": "Configure aqui os e-mails autorizados. O campo 'pin' pode ficar vazio e será cadastrado no primeiro acesso.",
+  "authorized_users": [
+    {
+      "email": "srross123@gmail.com",
+      "name": "Srross",
+      "pin": ""
+    },
+    {
+      "email": "frederickleao123@gmail.com",
+      "name": "Frederick",
+      "pin": ""
+    },
+    {
+      "email": "franciscoqueirozz@gmail.com",
+      "name": "Francisco",
+      "pin": ""
+    },
+    {
+      "email": "diretoria@iescursos.com.br",
+      "name": "Diretoria",
+      "pin": ""
+    }
   ]
 }

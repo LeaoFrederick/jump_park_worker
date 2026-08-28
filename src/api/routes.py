@@ -12,13 +12,16 @@ from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.api.auth import (
+    check_user_auth_status,
     create_session_token,
     format_display_name_from_email,
     get_current_user,
     get_google_client_id,
     is_email_authorized,
     load_auth_config,
+    set_user_pin,
     verify_google_token,
+    verify_user_pin,
 )
 from src.api.schemas import (
     ActionRequest,
@@ -98,53 +101,123 @@ class GoogleAuthPayload(BaseModel):
     credential: str
 
 
-class EmailAuthPayload(BaseModel):
+class CheckEmailPayload(BaseModel):
     email: str
 
 
+class SetPinPayload(BaseModel):
+    email: str
+    pin: str
+
+
+class LoginPinPayload(BaseModel):
+    email: str
+    pin: str
+
+
 # ──────────────────────────────────────────────────────────────────────────────
-# Rotas — Autenticação Google & Permissões
+# Rotas — Autenticação & PIN (Primeiro Acesso)
 # ──────────────────────────────────────────────────────────────────────────────
 @app.get("/api/auth/config")
 def auth_config():
-    """Retorna as configurações públicas de autenticação Google."""
+    """Retorna as configurações públicas de autenticação."""
     client_id = get_google_client_id()
     cfg = load_auth_config()
-    authorized_list = cfg.get("authorized_emails", [])
+    authorized_list = cfg.get("authorized_users", [])
     return {
         "auth_enabled": bool(client_id or authorized_list),
         "google_client_id": client_id,
     }
 
 
-@app.post("/api/auth/email")
-def auth_email(payload: EmailAuthPayload):
+@app.post("/api/auth/check-email")
+def auth_check_email(payload: CheckEmailPayload):
     """
-    Valida se o e-mail informado consta na whitelist de authorized_users.json
-    e retorna a sessão autenticada.
+    Verifica se o e-mail é autorizado e se é o primeiro acesso (sem PIN cadastrado).
     """
     email = payload.email.strip().lower()
     if not email or "@" not in email:
-        raise HTTPException(
-            status_code=400,
-            detail="Por favor, informe um endereço de e-mail válido.",
-        )
+        raise HTTPException(status_code=400, detail="E-mail inválido.")
 
-    if not is_email_authorized(email):
-        log.warning("[AUTH] Tentativa de login negada para e-mail não autorizado: %s", email)
+    status = check_user_auth_status(email)
+    if not status["authorized"]:
+        log.warning("[AUTH] E-mail não autorizado tentou checagem: %s", email)
         raise HTTPException(
             status_code=403,
             detail=f"O e-mail '{email}' não está autorizado a acessar este painel. Solicite permissão ao administrador.",
         )
 
-    name = format_display_name_from_email(email)
+    return {
+        "status": "ok",
+        "email": email,
+        "name": status["name"],
+        "first_access": status["first_access"],
+    }
+
+
+@app.post("/api/auth/set-pin")
+def auth_set_pin(payload: SetPinPayload):
+    """
+    Cadastra o PIN do gestor no primeiro acesso e retorna a sessão autenticada.
+    """
+    email = payload.email.strip().lower()
+    pin = payload.pin.strip()
+
+    if len(pin) < 4:
+        raise HTTPException(status_code=400, detail="O PIN deve ter no mínimo 4 dígitos.")
+
+    status = check_user_auth_status(email)
+    if not status["authorized"]:
+        raise HTTPException(status_code=403, detail="E-mail não autorizado.")
+
+    # Se já tiver PIN cadastrado, não permite sobrescrever por esta rota
+    if not status["first_access"]:
+        raise HTTPException(status_code=400, detail="Este e-mail já possui um PIN cadastrado. Faça login normalmente.")
+
+    user = set_user_pin(email, pin)
+    if not user:
+        raise HTTPException(status_code=500, detail="Falha ao gravar PIN no arquivo de usuários.")
+
     user_info = {
         "email": email,
-        "name": name,
+        "name": user.get("name") or format_display_name_from_email(email),
         "picture": "",
     }
     token = create_session_token(user_info)
-    log.info("[AUTH] Operador %s (%s) autenticado com sucesso via e-mail.", name, email)
+    log.info("[AUTH] Primeiro acesso concluído com sucesso para %s (%s).", user_info["name"], email)
+    return {
+        "status": "ok",
+        "token": token,
+        "user": user_info,
+    }
+
+
+@app.post("/api/auth/login-pin")
+def auth_login_pin(payload: LoginPinPayload):
+    """
+    Valida o PIN informado pelo gestor e gera a sessão de autenticação.
+    """
+    email = payload.email.strip().lower()
+    pin = payload.pin.strip()
+
+    status = check_user_auth_status(email)
+    if not status["authorized"]:
+        raise HTTPException(status_code=403, detail="E-mail não autorizado.")
+
+    if status["first_access"]:
+        raise HTTPException(status_code=400, detail="Primeiro acesso detectado. É necessário cadastrar um PIN primeiro.")
+
+    user = verify_user_pin(email, pin)
+    if not user:
+        raise HTTPException(status_code=401, detail="PIN incorreto. Tente novamente.")
+
+    user_info = {
+        "email": email,
+        "name": user.get("name") or format_display_name_from_email(email),
+        "picture": "",
+    }
+    token = create_session_token(user_info)
+    log.info("[AUTH] Operador %s (%s) logado com sucesso via PIN.", user_info["name"], email)
     return {
         "status": "ok",
         "token": token,
@@ -174,7 +247,7 @@ def auth_google(payload: GoogleAuthPayload):
         )
 
     token = create_session_token(user_info)
-    log.info("[AUTH] Usuário %s (%s) logado com sucesso.", user_info["name"], email)
+    log.info("[AUTH] Usuário %s (%s) logado com sucesso via Google.", user_info["name"], email)
     return {
         "status": "ok",
         "token": token,

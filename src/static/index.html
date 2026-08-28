@@ -14,9 +14,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@700;800;900&display=swap" rel="stylesheet" />
 
-  <!-- Google Identity Services (GIS) SDK Opcional -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-
   <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -147,38 +144,38 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
-  <!-- 🔐 TELA DE LOGIN OBRIGATÓRIO (MODAL BLOQUEADO ATÉ AUTORIZAR) 🔐 -->
+  <!-- 🔐 TELA DE LOGIN & PIN OBRIGATÓRIO (FLUXO INTELIGENTE DE 2 PASSOS) 🔐 -->
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
   <div id="login-overlay" class="fixed inset-0 z-40 bg-jp-bg flex flex-col items-center justify-center p-4 transition-all duration-300 hidden">
     <div class="relative max-w-sm w-full bg-jp-surface border border-jp-border rounded-3xl p-6 sm:p-7 shadow-2xl text-center space-y-5 animate-slide-down">
       <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-36 h-36 bg-jp-accent/20 rounded-full blur-3xl pointer-events-none"></div>
 
-      <!-- Ícone e Título -->
+      <!-- Ícone e Título Dinâmico -->
       <div class="space-y-2">
-        <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-jp-accent to-jp-purple flex items-center justify-center text-2xl shadow-glow-blue">
+        <div id="login-icon" class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-jp-accent to-jp-purple flex items-center justify-center text-2xl shadow-glow-blue">
           🔒
         </div>
-        <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight">
+        <h2 id="login-title" class="text-xl sm:text-2xl font-black text-white tracking-tight">
           Acesso Autorizado
         </h2>
-        <p class="text-xs text-jp-textMuted leading-relaxed">
-          Informe seu e-mail cadastrado na lista de operadores para desbloquear o painel.
+        <p id="login-sub" class="text-xs text-jp-textMuted leading-relaxed">
+          Informe seu e-mail cadastrado para acessar o painel.
         </p>
       </div>
 
-      <!-- Alerta de Erro / Acesso Negado -->
+      <!-- Alerta de Erro -->
       <div id="auth-error-box" class="hidden text-left bg-red-950/80 border border-red-500/50 rounded-xl p-3 space-y-1 animate-slide-down">
         <div class="flex items-center gap-1.5 text-red-300 font-bold text-xs">
           <span>⚠️</span>
           <span id="auth-error-title">Acesso Negado</span>
         </div>
         <p id="auth-error-msg" class="text-[11px] text-red-200 leading-relaxed">
-          Seu e-mail não possui autorização de acesso ao sistema.
+          E-mail não cadastrado na lista de operadores.
         </p>
       </div>
 
-      <!-- Formulário de Login Direto com E-mail -->
-      <form id="email-login-form" onsubmit="realizarLoginEmail(event)" class="space-y-3 pt-1">
+      <!-- ── ETAPA 1: DIGITAR E-MAIL ── -->
+      <form id="step-email-form" onsubmit="etapaVerificarEmail(event)" class="space-y-3 pt-1">
         <div class="space-y-1 text-left">
           <label for="login-email-input" class="text-xs font-bold text-jp-textSub">
             Seu E-mail de Operador
@@ -192,24 +189,78 @@
           </div>
         </div>
 
-        <button type="submit" id="btn-login-submit"
+        <button type="submit" id="btn-email-continue"
           class="w-full min-h-[46px] rounded-xl bg-gradient-to-r from-jp-accent to-blue-600 hover:from-blue-500 hover:to-blue-600 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-glow-blue flex items-center justify-center gap-2 transition-all cursor-pointer">
-          <span id="login-btn-text">Entrar no Painel</span>
-          <svg id="login-spinner" class="hidden w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <span id="email-btn-text">Continuar</span>
+          <svg id="email-spinner" class="hidden w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.3"/>
             <path d="M12 2a10 10 0 0 1 10 10" stroke="white" stroke-linecap="round"/>
           </svg>
         </button>
       </form>
 
-      <!-- Divisor e Botão Google Oficial (Se Client ID configurado) -->
-      <div id="google-login-section" class="hidden space-y-3 pt-2 border-t border-jp-border/70">
-        <span class="text-[11px] font-bold text-jp-textDim uppercase block">Ou acesse com o Google</span>
-        <div id="g_id_signin_container" class="flex justify-center"></div>
-      </div>
+      <!-- ── ETAPA 2A: PRIMEIRO ACESSO (CRIAR NOVO PIN) ── -->
+      <form id="step-first-access-form" onsubmit="etapaCriarPin(event)" class="space-y-3 pt-1 hidden">
+        <div class="bg-blue-950/40 border border-blue-500/30 rounded-xl p-2.5 text-[11px] text-blue-300 text-left">
+          🎉 <strong>Primeiro Acesso!</strong> Escolha um PIN de 4 a 6 dígitos para proteger sua conta nas próximas vezes.
+        </div>
+
+        <div class="space-y-1 text-left">
+          <label for="new-pin-input" class="text-xs font-bold text-jp-textSub">
+            Criar Novo PIN (4 a 6 dígitos)
+          </label>
+          <input type="password" id="new-pin-input" inputmode="numeric" maxlength="6" pattern="[0-9]*" required placeholder="••••" autocomplete="new-password"
+            class="w-full bg-[#090e17] border border-jp-border rounded-xl text-center font-mono text-xl tracking-widest py-2.5 text-white placeholder:text-jp-textDim outline-none focus:border-jp-accent focus:ring-1 focus:ring-jp-accent/30 transition-all" />
+        </div>
+
+        <div class="space-y-1 text-left">
+          <label for="confirm-pin-input" class="text-xs font-bold text-jp-textSub">
+            Confirmar PIN
+          </label>
+          <input type="password" id="confirm-pin-input" inputmode="numeric" maxlength="6" pattern="[0-9]*" required placeholder="••••" autocomplete="new-password"
+            class="w-full bg-[#090e17] border border-jp-border rounded-xl text-center font-mono text-xl tracking-widest py-2.5 text-white placeholder:text-jp-textDim outline-none focus:border-jp-accent focus:ring-1 focus:ring-jp-accent/30 transition-all" />
+        </div>
+
+        <button type="submit" id="btn-save-pin"
+          class="w-full min-h-[46px] rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-glow-green flex items-center justify-center gap-2 transition-all cursor-pointer">
+          <span id="save-pin-text">Salvar PIN e Entrar</span>
+          <svg id="save-pin-spinner" class="hidden w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.3"/>
+            <path d="M12 2a10 10 0 0 1 10 10" stroke="white" stroke-linecap="round"/>
+          </svg>
+        </button>
+
+        <button type="button" onclick="voltarParaEmail()" class="text-xs text-jp-textMuted hover:text-white font-semibold pt-1">
+          ← Trocar de e-mail
+        </button>
+      </form>
+
+      <!-- ── ETAPA 2B: DIGITAR PIN EXISTENTE ── -->
+      <form id="step-login-pin-form" onsubmit="etapaLogarPin(event)" class="space-y-3 pt-1 hidden">
+        <div class="space-y-1 text-left">
+          <label for="login-pin-input" class="text-xs font-bold text-jp-textSub">
+            Digite seu PIN de 4 a 6 dígitos
+          </label>
+          <input type="password" id="login-pin-input" inputmode="numeric" maxlength="6" pattern="[0-9]*" required placeholder="••••" autocomplete="current-password" autofocus
+            class="w-full bg-[#090e17] border border-jp-border rounded-xl text-center font-mono text-2xl tracking-widest py-3 text-white placeholder:text-jp-textDim outline-none focus:border-jp-accent focus:ring-1 focus:ring-jp-accent/30 transition-all" />
+        </div>
+
+        <button type="submit" id="btn-login-pin"
+          class="w-full min-h-[46px] rounded-xl bg-gradient-to-r from-jp-accent to-blue-600 hover:from-blue-500 hover:to-blue-600 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-glow-blue flex items-center justify-center gap-2 transition-all cursor-pointer">
+          <span id="login-pin-text">Desbloquear Painel</span>
+          <svg id="login-pin-spinner" class="hidden w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.3"/>
+            <path d="M12 2a10 10 0 0 1 10 10" stroke="white" stroke-linecap="round"/>
+          </svg>
+        </button>
+
+        <button type="button" onclick="voltarParaEmail()" class="text-xs text-jp-textMuted hover:text-white font-semibold pt-1">
+          ← Trocar de e-mail
+        </button>
+      </form>
 
       <div class="pt-2 text-[10px] text-jp-textDim">
-        Jump Park Worker Security • Whitelist JSON
+        Jump Park Worker Security • PIN Protection
       </div>
     </div>
   </div>
@@ -541,7 +592,7 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
-  <!-- 📜 SCRIPT DE LÓGICA DO FRONTEND STANDALONE & AUTENTICAÇÃO 📜 -->
+  <!-- 📜 SCRIPT DE LÓGICA DO FRONTEND STANDALONE & AUTENTICAÇÃO COM PIN 📜 -->
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
   <script>
     /* ──────────────────────────────────────────
@@ -555,6 +606,7 @@
     var historicoAberto  = false;
     var authConfig       = { auth_enabled: false, google_client_id: "" };
     var usuarioLogado    = null;
+    var emailEmLogin     = "";
 
     /* ──────────────────────────────────────────
        Autenticação & Permissões
@@ -590,7 +642,6 @@
         } catch (e) {}
       }
 
-      // Se não autenticado e auth estiver ativa
       if (authConfig.auth_enabled) {
         exibirTelaLogin();
         return false;
@@ -603,130 +654,205 @@
     function exibirTelaLogin() {
       var overlay = document.getElementById('login-overlay');
       overlay.classList.remove('hidden');
+      voltarParaEmail();
 
-      // Tenta recuperar último e-mail digitado no dispositivo
       var emailSalvo = localStorage.getItem('jp_operator_email');
       if (emailSalvo) {
         document.getElementById('login-email-input').value = emailSalvo;
       }
-
-      // Se Google Client ID configurado, ativa Google Sign-in também
-      if (authConfig.google_client_id && window.google) {
-        document.getElementById('google-login-section').classList.remove('hidden');
-        inicializarGoogleGIS();
-      }
     }
 
-    async function realizarLoginEmail(event) {
+    /* ── ETAPA 1: VERIFICAR E-MAIL ── */
+    async function etapaVerificarEmail(event) {
       if (event) event.preventDefault();
 
       var emailInput = document.getElementById('login-email-input');
       var email = emailInput.value.trim().toLowerCase();
-      var btnSubmit = document.getElementById('btn-login-submit');
-      var btnText = document.getElementById('login-btn-text');
-      var spinner = document.getElementById('login-spinner');
+      var btn = document.getElementById('btn-email-continue');
+      var btnText = document.getElementById('email-btn-text');
+      var spinner = document.getElementById('email-spinner');
       var errorBox = document.getElementById('auth-error-box');
 
       if (!email || !email.includes('@')) {
-        mostrarErroLogin('Por favor, informe um e-mail válido.');
+        mostrarErroAuth('Por favor, informe um endereço de e-mail válido.');
         return;
       }
 
       errorBox.classList.add('hidden');
-      btnSubmit.disabled = true;
+      btn.disabled = true;
       btnText.textContent = 'Verificando...';
       spinner.classList.remove('hidden');
 
       try {
-        var res = await fetch('/api/auth/email', {
+        var res = await fetch('/api/auth/check-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: email })
         });
 
         var data = await res.json();
-        btnSubmit.disabled = false;
-        btnText.textContent = 'Entrar no Painel';
+        btn.disabled = false;
+        btnText.textContent = 'Continuar';
         spinner.classList.add('hidden');
 
         if (res.ok && data.status === 'ok') {
-          localStorage.setItem('jp_auth_token', data.token);
-          localStorage.setItem('jp_operator_email', email);
-          usuarioLogado = data.user;
-          aplicarUsuarioLogado(usuarioLogado);
+          emailEmLogin = email;
+          document.getElementById('step-email-form').classList.add('hidden');
 
-          document.getElementById('login-overlay').classList.add('hidden');
-          mostrarFeedback('✅ Bem-vindo(a), ' + usuarioLogado.name + '!', 'ok');
-          carregarHistorico(true);
+          if (data.first_access) {
+            // Primeiro Acesso -> Criar PIN
+            document.getElementById('login-icon').textContent = '🎉';
+            document.getElementById('login-title').textContent = 'Olá, ' + data.name + '!';
+            document.getElementById('login-sub').textContent = 'Crie seu PIN de 4 a 6 dígitos para proteger sua conta.';
+            document.getElementById('step-first-access-form').classList.remove('hidden');
+            setTimeout(function() { document.getElementById('new-pin-input').focus(); }, 100);
+          } else {
+            // Acesso Recorrente -> Digitar PIN
+            document.getElementById('login-icon').textContent = '🔑';
+            document.getElementById('login-title').textContent = 'Olá, ' + data.name + '!';
+            document.getElementById('login-sub').textContent = 'Digite seu PIN de 4 a 6 dígitos cadastrado.';
+            document.getElementById('step-login-pin-form').classList.remove('hidden');
+            setTimeout(function() { document.getElementById('login-pin-input').focus(); }, 100);
+          }
         } else {
-          mostrarErroLogin(data.detail || 'E-mail não autorizado a acessar este painel.');
+          mostrarErroAuth(data.detail || 'E-mail não autorizado a acessar este painel.');
         }
       } catch (err) {
-        btnSubmit.disabled = false;
-        btnText.textContent = 'Entrar no Painel';
+        btn.disabled = false;
+        btnText.textContent = 'Continuar';
         spinner.classList.add('hidden');
-        mostrarErroLogin('Falha ao conectar com o servidor: ' + err.message);
+        mostrarErroAuth('Falha de conexão com o servidor: ' + err.message);
       }
     }
 
-    function mostrarErroLogin(msg) {
+    /* ── ETAPA 2A: SALVAR NOVO PIN (PRIMEIRO ACESSO) ── */
+    async function etapaCriarPin(event) {
+      if (event) event.preventDefault();
+
+      var pin1 = document.getElementById('new-pin-input').value.trim();
+      var pin2 = document.getElementById('confirm-pin-input').value.trim();
+      var btn = document.getElementById('btn-save-pin');
+      var btnText = document.getElementById('save-pin-text');
+      var spinner = document.getElementById('save-pin-spinner');
       var errorBox = document.getElementById('auth-error-box');
-      document.getElementById('auth-error-msg').textContent = msg;
-      errorBox.classList.remove('hidden');
-    }
 
-    function inicializarGoogleGIS() {
-      if (!window.google || !authConfig.google_client_id) return;
-
-      try {
-        google.accounts.id.initialize({
-          client_id: authConfig.google_client_id,
-          callback: handleGoogleLoginResponse,
-          auto_select: true
-        });
-
-        var container = document.getElementById('g_id_signin_container');
-        container.innerHTML = '';
-        google.accounts.id.renderButton(container, {
-          theme: 'filled_blue',
-          size: 'large',
-          text: 'signin_with',
-          shape: 'pill',
-          width: 250
-        });
-
-        google.accounts.id.prompt();
-      } catch (err) {
-        console.error('Erro ao inicializar Google GIS:', err);
+      if (!pin1 || pin1.length < 4) {
+        mostrarErroAuth('O PIN deve ter no mínimo 4 dígitos numéricos.');
+        return;
       }
-    }
 
-    async function handleGoogleLoginResponse(response) {
-      if (!response.credential) return;
+      if (pin1 !== pin2) {
+        mostrarErroAuth('Os PINs digitados não coincidem. Digite novamente.');
+        return;
+      }
+
+      errorBox.classList.add('hidden');
+      btn.disabled = true;
+      btnText.textContent = 'Gravando PIN...';
+      spinner.classList.remove('hidden');
 
       try {
-        var res = await fetch('/api/auth/google', {
+        var res = await fetch('/api/auth/set-pin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: response.credential })
+          body: JSON.stringify({ email: emailEmLogin, pin: pin1 })
         });
 
         var data = await res.json();
+        btn.disabled = false;
+        btnText.textContent = 'Salvar PIN e Entrar';
+        spinner.classList.add('hidden');
 
         if (res.ok && data.status === 'ok') {
           localStorage.setItem('jp_auth_token', data.token);
+          localStorage.setItem('jp_operator_email', emailEmLogin);
           usuarioLogado = data.user;
           aplicarUsuarioLogado(usuarioLogado);
 
           document.getElementById('login-overlay').classList.add('hidden');
-          mostrarFeedback('✅ Bem-vindo(a), ' + usuarioLogado.name + '!', 'ok');
+          mostrarFeedback('✅ PIN cadastrado com sucesso! Bem-vindo(a), ' + usuarioLogado.name + '!', 'ok');
           carregarHistorico(true);
         } else {
-          mostrarErroLogin(data.detail || 'Não foi possível validar o login Google.');
+          mostrarErroAuth(data.detail || 'Não foi possível cadastrar o PIN.');
         }
       } catch (err) {
-        mostrarErroLogin('Falha na comunicação com o servidor: ' + err.message);
+        btn.disabled = false;
+        btnText.textContent = 'Salvar PIN e Entrar';
+        spinner.classList.add('hidden');
+        mostrarErroAuth('Falha ao gravar PIN: ' + err.message);
       }
+    }
+
+    /* ── ETAPA 2B: LOGAR COM PIN EXISTENTE ── */
+    async function etapaLogarPin(event) {
+      if (event) event.preventDefault();
+
+      var pinInput = document.getElementById('login-pin-input');
+      var pin = pinInput.value.trim();
+      var btn = document.getElementById('btn-login-pin');
+      var btnText = document.getElementById('login-pin-text');
+      var spinner = document.getElementById('login-pin-spinner');
+      var errorBox = document.getElementById('auth-error-box');
+
+      if (!pin || pin.length < 4) {
+        mostrarErroAuth('Digite seu PIN de 4 a 6 dígitos.');
+        return;
+      }
+
+      errorBox.classList.add('hidden');
+      btn.disabled = true;
+      btnText.textContent = 'Validando PIN...';
+      spinner.classList.remove('hidden');
+
+      try {
+        var res = await fetch('/api/auth/login-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailEmLogin, pin: pin })
+        });
+
+        var data = await res.json();
+        btn.disabled = false;
+        btnText.textContent = 'Desbloquear Painel';
+        spinner.classList.add('hidden');
+
+        if (res.ok && data.status === 'ok') {
+          localStorage.setItem('jp_auth_token', data.token);
+          localStorage.setItem('jp_operator_email', emailEmLogin);
+          usuarioLogado = data.user;
+          aplicarUsuarioLogado(usuarioLogado);
+
+          document.getElementById('login-overlay').classList.add('hidden');
+          mostrarFeedback('✅ Bem-vindo(a) de volta, ' + usuarioLogado.name + '!', 'ok');
+          carregarHistorico(true);
+        } else {
+          pinInput.value = '';
+          pinInput.focus();
+          mostrarErroAuth(data.detail || 'PIN incorreto. Tente novamente.');
+        }
+      } catch (err) {
+        btn.disabled = false;
+        btnText.textContent = 'Desbloquear Painel';
+        spinner.classList.add('hidden');
+        mostrarErroAuth('Falha na autenticação: ' + err.message);
+      }
+    }
+
+    function voltarParaEmail() {
+      document.getElementById('auth-error-box').classList.add('hidden');
+      document.getElementById('login-icon').textContent = '🔒';
+      document.getElementById('login-title').textContent = 'Acesso Autorizado';
+      document.getElementById('login-sub').textContent = 'Informe seu e-mail cadastrado para acessar o painel.';
+      document.getElementById('step-first-access-form').classList.add('hidden');
+      document.getElementById('step-login-pin-form').classList.add('hidden');
+      document.getElementById('step-email-form').classList.remove('hidden');
+      emailEmLogin = "";
+    }
+
+    function mostrarErroAuth(msg) {
+      var errorBox = document.getElementById('auth-error-box');
+      document.getElementById('auth-error-msg').textContent = msg;
+      errorBox.classList.remove('hidden');
     }
 
     function aplicarUsuarioLogado(user) {
@@ -753,9 +879,6 @@
       document.getElementById('user-profile-badge').classList.add('hidden');
       document.getElementById('user-profile-badge').classList.remove('flex');
       exibirTelaLogin();
-      if (window.google && google.accounts && google.accounts.id) {
-        google.accounts.id.disableAutoSelect();
-      }
     }
 
     /* ──────────────────────────────────────────
@@ -892,7 +1015,7 @@
         if (response.status === 401) {
           setLoading(acao, false);
           fazerLogout();
-          mostrarFeedback('⚠️ Sessão expirada. Faça login novamente.', 'error');
+          mostrarFeedback('⚠️ Sessão expirada. Faça login com seu PIN novamente.', 'error');
           return;
         }
 
@@ -1272,7 +1395,7 @@
       var statusTxt = document.getElementById('loading-status-text');
 
       if (bar) bar.style.width = '60%';
-      if (statusTxt) statusTxt.innerHTML = '<span class="w-2 h-2 rounded-full bg-jp-accent animate-ping"></span><span>Validando permissões de acesso...</span>';
+      if (statusTxt) statusTxt.innerHTML = '<span class="w-2 h-2 rounded-full bg-jp-accent animate-ping"></span><span>Validando sessão de segurança...</span>';
 
       var logadoOuPermitido = await checarConfiguracaoAuth();
 
