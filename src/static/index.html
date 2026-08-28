@@ -93,6 +93,13 @@
       min-height: 100vh;
       overflow-x: hidden;
     }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
     .skeleton-box {
       background: linear-gradient(90deg, #17202e 25%, #253346 50%, #17202e 75%);
       background-size: 200% 100%;
@@ -409,22 +416,22 @@
             🛡️
           </div>
           <div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <h3 class="text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider">
                 PLACAS BLOQUEADAS POR UNIDADE
               </h3>
-              <span id="badge-total-bloqueadas" class="px-2 py-0.5 text-[10px] font-black rounded-full bg-red-950/80 text-red-300 border border-red-500/40 animate-pulse">
-                Consultando...
+              <span id="badge-total-bloqueadas" class="px-2 py-0.5 text-[10px] font-black rounded-full bg-red-950/80 text-red-300 border border-red-500/40">
+                Carregando...
               </span>
             </div>
-            <p class="text-[11px] sm:text-xs text-jp-textMuted">
-              Consulte e pesquise os veículos restritos na API da Jump Park.
+            <p class="text-[11px] sm:text-xs text-jp-textMuted mt-0.5">
+              Consulte os veículos atualmente restritos na API da Jump Park.
             </p>
           </div>
         </div>
 
         <button type="button" onclick="abrirModalBloqueados()"
-          class="min-h-[42px] px-4 rounded-xl bg-jp-surface2 hover:bg-jp-hover active:scale-95 border border-jp-border hover:border-jp-accent text-xs sm:text-sm font-extrabold text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm">
+          class="w-full sm:w-auto min-h-[42px] px-4 rounded-xl bg-jp-surface2 hover:bg-jp-hover active:scale-95 border border-jp-border hover:border-jp-accent text-xs sm:text-sm font-extrabold text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm shrink-0">
           <span>👁️ Ver Placas Bloqueadas</span>
           <span class="text-jp-accent">➔</span>
         </button>
@@ -559,62 +566,65 @@
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
   <!-- 🛡️ MODAL: PLACAS BLOQUEADAS POR ESTABELECIMENTO 🛡️ -->
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
-  <div id="modal-bloqueados-overlay" onclick="fecharModalBloqueadosBackdrop(event)" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4 transition-all duration-200">
-    <div class="bg-jp-surface border border-jp-border rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-2xl space-y-4 animate-slide-down max-h-[90vh] flex flex-col">
+  <div id="modal-bloqueados-overlay" onclick="fecharModalBloqueadosBackdrop(event)" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-2.5 sm:p-4 transition-all duration-200">
+    <div class="bg-jp-surface border border-jp-border rounded-2xl sm:rounded-3xl max-w-lg w-full p-3.5 sm:p-5 shadow-2xl space-y-3 sm:space-y-4 animate-slide-down max-h-[92vh] flex flex-col">
       
       <!-- Cabeçalho do Modal -->
       <div class="flex items-start justify-between border-b border-jp-border/80 pb-3 shrink-0">
         <div>
           <div class="flex items-center gap-2">
             <span class="text-base sm:text-lg">🛡️</span>
-            <h3 class="text-base sm:text-lg font-black text-white">Placas Bloqueadas</h3>
+            <h3 class="text-sm sm:text-base font-black text-white">Placas Bloqueadas</h3>
           </div>
           <p id="modal-bloqueados-subtitle" class="text-[11px] sm:text-xs text-jp-textMuted mt-0.5">
             Carregando lista de restrições por unidade...
           </p>
         </div>
-        <div class="flex items-center gap-1.5">
-          <button onclick="carregarPlacasBloqueadas(true)" title="Recarregar Lista da API Jump Park" class="w-8 h-8 rounded-full bg-jp-surface2 hover:bg-jp-hover text-jp-textSub hover:text-white flex items-center justify-center text-xs font-bold transition-all">
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button onclick="carregarPlacasBloqueadas(true)" title="Recarregar Lista da API Jump Park" class="w-8 h-8 rounded-full bg-jp-surface2 hover:bg-jp-hover active:scale-90 text-jp-textSub hover:text-white flex items-center justify-center text-xs font-bold transition-all">
             ↺
           </button>
-          <button onclick="fecharModalBloqueados()" class="w-8 h-8 rounded-full bg-jp-surface2 hover:bg-jp-hover text-jp-textMuted hover:text-white flex items-center justify-center text-sm font-bold transition-all">
+          <button onclick="fecharModalBloqueados()" class="w-8 h-8 rounded-full bg-jp-surface2 hover:bg-jp-hover active:scale-90 text-jp-textMuted hover:text-white flex items-center justify-center text-sm font-bold transition-all">
             ✕
           </button>
         </div>
       </div>
 
       <!-- Abas de Filtro por Estabelecimento -->
-      <div id="bloqueados-tabs" class="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0 no-scrollbar">
+      <div id="bloqueados-tabs" class="flex items-center gap-1.5 overflow-x-auto pb-1.5 pt-0.5 shrink-0 no-scrollbar touch-pan-x">
         <!-- Renderizado dinamicamente via JS -->
-        <button class="px-3 py-1 rounded-xl text-xs font-bold bg-jp-accent text-white">Todas</button>
+        <button class="px-3 py-1.5 rounded-xl text-xs font-bold bg-jp-accent text-white shrink-0">Todas as Unidades</button>
       </div>
 
       <!-- Busca Rápida de Placa Bloqueada -->
       <div class="relative shrink-0">
-        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-jp-textMuted">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-jp-textMuted text-xs">
           🔍
         </div>
-        <input type="text" id="search-bloqueadas" placeholder="Pesquisar placa bloqueada..." autocomplete="off"
-          class="w-full bg-[#090e17] border border-jp-border rounded-xl pl-8 pr-3 py-2 text-xs sm:text-sm font-semibold text-white placeholder:text-jp-textDim outline-none focus:border-jp-accent uppercase"
+        <input type="text" id="search-bloqueadas" placeholder="Pesquisar placa bloqueada (ex: ABC1D23)..." autocomplete="off"
+          class="w-full bg-[#090e17] border border-jp-border rounded-xl pl-8 pr-8 py-2 text-xs sm:text-sm font-semibold text-white placeholder:text-jp-textDim outline-none focus:border-jp-accent uppercase"
           oninput="filtrarPlacasBloqueadas()" />
+        <button id="btn-clear-search-bloqueadas" onclick="limparBuscaBloqueadas()" class="hidden absolute inset-y-0 right-0 pr-2.5 flex items-center text-xs text-jp-textMuted hover:text-white">
+          ✕
+        </button>
       </div>
 
       <!-- Lista Rolável de Placas Bloqueadas -->
-      <div id="bloqueados-list" class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[220px]">
+      <div id="bloqueados-list" class="flex-1 overflow-y-auto space-y-2.5 pr-1 min-h-[200px]">
         <!-- Skeleton Loaders -->
         <div class="space-y-2">
-          <div class="skeleton-box rounded-xl h-16 w-full"></div>
-          <div class="skeleton-box rounded-xl h-16 w-full"></div>
-          <div class="skeleton-box rounded-xl h-16 w-full"></div>
+          <div class="skeleton-box rounded-xl h-20 w-full"></div>
+          <div class="skeleton-box rounded-xl h-20 w-full"></div>
+          <div class="skeleton-box rounded-xl h-20 w-full"></div>
         </div>
       </div>
 
       <!-- Rodapé do Modal -->
-      <div class="border-t border-jp-border/80 pt-3 flex items-center justify-between shrink-0 text-xs">
+      <div class="border-t border-jp-border/80 pt-2.5 flex items-center justify-between shrink-0 text-xs">
         <span id="bloqueados-contador-rodape" class="font-bold text-jp-textMuted text-[11px]">
           Total: 0 placa(s)
         </span>
-        <button onclick="fecharModalBloqueados()" class="px-4 py-2 rounded-xl bg-jp-surface2 hover:bg-jp-hover text-white font-bold transition-all">
+        <button onclick="fecharModalBloqueados()" class="px-3.5 py-1.5 rounded-xl bg-jp-surface2 hover:bg-jp-hover active:scale-95 text-white font-bold text-xs transition-all">
           Fechar
         </button>
       </div>
@@ -1095,14 +1105,14 @@
       if (!tabsContainer || !dadosBloqueadosAPI) return;
 
       var totalGeral = dadosBloqueadosAPI.total_placas_unicas || 0;
-      var html = '<button onclick="selecionarTabBloqueados(\'ALL\')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ' + 
+      var html = '<button type="button" onclick="selecionarTabBloqueados(\'ALL\')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap ' + 
         (tabBloqueadosAtiva === 'ALL' ? 'bg-jp-accent text-white shadow-glow-blue' : 'bg-jp-surface2 text-jp-textMuted hover:text-white') + '">' +
         'Todas as Unidades (' + totalGeral + ')' +
         '</button>';
 
       (dadosBloqueadosAPI.estabelecimentos || []).forEach(function(est) {
         var isAtiva = (tabBloqueadosAtiva === est.estabelecimento);
-        html += '<button onclick="selecionarTabBloqueados(\'' + est.estabelecimento + '\')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ' +
+        html += '<button type="button" onclick="selecionarTabBloqueados(\'' + est.estabelecimento + '\')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap ' +
           (isAtiva ? 'bg-jp-accent text-white shadow-glow-blue' : 'bg-jp-surface2 text-jp-textMuted hover:text-white') + '">' +
           est.estabelecimento + ' (' + est.total + ')' +
           '</button>';
@@ -1119,9 +1129,14 @@
 
     function filtrarPlacasBloqueadas() {
       var searchInput = document.getElementById('search-bloqueadas');
+      var clearBtn = document.getElementById('btn-clear-search-bloqueadas');
       var termo = searchInput ? searchInput.value.trim().toUpperCase() : '';
       var listEl = document.getElementById('bloqueados-list');
       var contadorRodape = document.getElementById('bloqueados-contador-rodape');
+
+      if (clearBtn) {
+        clearBtn.classList.toggle('hidden', termo.length === 0);
+      }
 
       var filtradas = placasBloqueadasFlat.filter(function(item) {
         if (tabBloqueadosAtiva !== 'ALL' && !item.estabelecimentos.includes(tabBloqueadosAtiva)) {
@@ -1134,7 +1149,7 @@
       });
 
       if (contadorRodape) {
-        contadorRodape.textContent = 'Exibindo ' + filtradas.length + ' placa(s)';
+        contadorRodape.textContent = 'Exibindo ' + filtradas.length + ' de ' + placasBloqueadasFlat.length + ' placa(s)';
       }
 
       if (filtradas.length === 0) {
@@ -1149,31 +1164,39 @@
 
       listEl.innerHTML = filtradas.map(function(item) {
         var badgesEst = item.estabelecimentos.map(function(est) {
-          return '<span class="px-2 py-0.5 rounded-md bg-jp-surface2 border border-jp-border text-[10px] font-bold text-jp-textSub">' + est + '</span>';
+          return '<span class="px-2 py-0.5 rounded-md bg-jp-surface2 border border-jp-border/70 text-[10px] font-bold text-jp-textSub shrink-0">' + est + '</span>';
         }).join(' ');
 
-        return '<div class="bg-jp-card border border-jp-border hover:border-jp-accent/50 rounded-xl p-3 flex items-center justify-between gap-2 transition-all">' +
-          '<div class="space-y-1">' +
-          '  <div class="flex items-center gap-2">' +
-          '    <span class="font-mono text-base font-black text-white tracking-wider bg-[#090e17] px-2.5 py-0.5 rounded border border-jp-border">' + item.plate + '</span>' +
-          '    <span class="text-[10px] font-black text-red-400 bg-red-950/70 border border-red-500/30 px-2 py-0.5 rounded-full">🔒 Bloqueado</span>' +
+        return '<div class="group bg-jp-card hover:bg-jp-hover border border-jp-border hover:border-jp-accent/50 rounded-xl p-3 space-y-2.5 transition-all shadow-sm">' +
+          '<div class="flex items-center justify-between gap-2">' +
+          '  <div class="flex items-center gap-2 flex-wrap">' +
+          '    <span class="font-mono text-base sm:text-lg font-black text-white tracking-widest bg-[#090e17] px-2.5 py-0.5 rounded-lg border border-jp-border">' + item.plate + '</span>' +
+          '    <span class="inline-flex items-center gap-1 text-[10px] sm:text-xs font-black text-red-400 bg-red-950/70 border border-red-500/40 px-2 py-0.5 rounded-full">🔒 Bloqueado</span>' +
           '  </div>' +
-          '  <div class="flex flex-wrap gap-1 items-center">' +
-          '    <span class="text-[9px] font-bold uppercase text-jp-textDim mr-0.5">Unidades:</span>' +
-          '    ' + badgesEst +
-          '  </div>' +
+          '  <button type="button" onclick="copiarTexto(\'' + item.plate + '\')" title="Copiar Placa" class="px-2.5 py-1 rounded-lg bg-jp-surface2 hover:bg-jp-hover active:scale-95 border border-jp-border text-[11px] font-bold text-jp-textSub hover:text-white flex items-center gap-1 transition-all shrink-0">' +
+          '    <span>📋</span><span class="hidden xs:inline">Copiar</span>' +
+          '  </button>' +
           '</div>' +
 
-          '<div class="flex items-center gap-1.5 shrink-0">' +
-          '  <button onclick="copiarTexto(\'' + item.plate + '\')" title="Copiar Placa" class="px-2.5 py-1.5 rounded-lg bg-jp-surface2 hover:bg-jp-hover border border-jp-border text-xs font-bold text-jp-textSub transition-all">' +
-          '    Copiar' +
-          '  </button>' +
-          '  <button onclick="selecionarPlacaParaAcao(\'' + item.plate + '\')" title="Preencher para Desbloquear" class="px-2.5 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-xs font-black text-emerald-300 transition-all">' +
-          '    Desbloquear ➔' +
-          '  </button>' +
+          '<div class="flex items-center gap-1.5 flex-wrap text-[10px] pt-0.5">' +
+          '  <span class="text-jp-textDim font-bold uppercase text-[9px] mr-0.5">Unidades:</span>' +
+          '  ' + badgesEst +
           '</div>' +
+
+          '<button type="button" onclick="selecionarPlacaParaAcao(\'' + item.plate + '\')" title="Preencher placa para desbloqueio" class="w-full min-h-[38px] rounded-xl bg-emerald-950/80 hover:bg-emerald-900 active:scale-98 border border-emerald-500/40 text-xs sm:text-sm font-extrabold text-emerald-300 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm">' +
+          '  <span>🔓 Preencher e Desbloquear</span>' +
+          '  <span class="text-emerald-400">➔</span>' +
+          '</button>' +
         '</div>';
       }).join('');
+    }
+
+    function limparBuscaBloqueadas() {
+      var searchInput = document.getElementById('search-bloqueadas');
+      if (searchInput) {
+        searchInput.value = '';
+        filtrarPlacasBloqueadas();
+      }
     }
 
     function copiarTexto(txt) {
@@ -1190,7 +1213,7 @@
         formatarPlacaInput(input);
         input.scrollIntoView({ behavior: 'smooth', block: 'center' });
         input.focus();
-        mostrarFeedback('👉 Placa ' + placa + ' pronta para desbloquear. Clique no botão Desbloquear.', 'warn');
+        mostrarFeedback('👉 Placa ' + placa + ' preenchida! Clique em Desbloquear.', 'warn');
       }
     }
 
