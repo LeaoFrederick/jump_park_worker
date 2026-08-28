@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@700;800;900&display=swap" rel="stylesheet" />
 
-  <!-- Google Identity Services (GIS) SDK -->
+  <!-- Google Identity Services (GIS) SDK Opcional -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <!-- Tailwind CSS via CDN -->
@@ -147,65 +147,75 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
-  <!-- 🔐 TELA DE LOGIN GOOGLE OBRIGATÓRIO (MODAL/TELA BLOQUEADA) 🔐 -->
+  <!-- 🔐 TELA DE LOGIN OBRIGATÓRIO (MODAL BLOQUEADO ATÉ AUTORIZAR) 🔐 -->
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
   <div id="login-overlay" class="fixed inset-0 z-40 bg-jp-bg flex flex-col items-center justify-center p-4 transition-all duration-300 hidden">
-    <div class="relative max-w-sm w-full bg-jp-surface border border-jp-border rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6 animate-slide-down">
-      <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-40 h-40 bg-jp-accent/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-sm w-full bg-jp-surface border border-jp-border rounded-3xl p-6 sm:p-7 shadow-2xl text-center space-y-5 animate-slide-down">
+      <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-36 h-36 bg-jp-accent/20 rounded-full blur-3xl pointer-events-none"></div>
 
       <!-- Ícone e Título -->
-      <div class="space-y-3">
-        <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-jp-accent to-jp-purple flex items-center justify-center text-3xl shadow-glow-blue">
+      <div class="space-y-2">
+        <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-jp-accent to-jp-purple flex items-center justify-center text-2xl shadow-glow-blue">
           🔒
         </div>
         <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight">
-          Acesso Restrito
+          Acesso Autorizado
         </h2>
-        <p class="text-xs sm:text-sm text-jp-textMuted leading-relaxed">
-          Faça login com sua conta Google autorizada para operar o painel de bloqueios.
+        <p class="text-xs text-jp-textMuted leading-relaxed">
+          Informe seu e-mail cadastrado na lista de operadores para desbloquear o painel.
         </p>
       </div>
 
-      <!-- Alerta de Erro de Acesso / Bloqueio -->
-      <div id="auth-error-box" class="hidden text-left bg-red-950/80 border border-red-500/50 rounded-2xl p-3.5 space-y-1.5 animate-slide-down">
-        <div class="flex items-center gap-2 text-red-300 font-black text-xs sm:text-sm">
+      <!-- Alerta de Erro / Acesso Negado -->
+      <div id="auth-error-box" class="hidden text-left bg-red-950/80 border border-red-500/50 rounded-xl p-3 space-y-1 animate-slide-down">
+        <div class="flex items-center gap-1.5 text-red-300 font-bold text-xs">
           <span>⚠️</span>
           <span id="auth-error-title">Acesso Negado</span>
         </div>
-        <p id="auth-error-msg" class="text-xs text-red-200 leading-relaxed">
-          Seu e-mail não está cadastrado na lista de operadores autorizados.
+        <p id="auth-error-msg" class="text-[11px] text-red-200 leading-relaxed">
+          Seu e-mail não possui autorização de acesso ao sistema.
         </p>
       </div>
 
-      <!-- Container do Botão Google GIS -->
-      <div class="flex flex-col items-center justify-center pt-2 space-y-3">
-        <div id="g_id_onload"
-             data-client_id=""
-             data-context="signin"
-             data-ux_mode="popup"
-             data-callback="handleGoogleLoginResponse"
-             data-auto_prompt="true">
+      <!-- Formulário de Login Direto com E-mail -->
+      <form id="email-login-form" onsubmit="realizarLoginEmail(event)" class="space-y-3 pt-1">
+        <div class="space-y-1 text-left">
+          <label for="login-email-input" class="text-xs font-bold text-jp-textSub">
+            Seu E-mail de Operador
+          </label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-jp-textMuted">
+              ✉️
+            </div>
+            <input type="email" id="login-email-input" required placeholder="seuemail@gmail.com" autocomplete="email"
+              class="w-full bg-[#090e17] border border-jp-border rounded-xl pl-9 pr-3 py-3 text-xs sm:text-sm font-semibold text-white placeholder:text-jp-textDim outline-none focus:border-jp-accent focus:ring-1 focus:ring-jp-accent/30 transition-all" />
+          </div>
         </div>
 
-        <div id="g_id_signin_container" class="w-full flex justify-center min-h-[44px]">
-          <!-- Renderizado via JS -->
-          <div class="text-xs text-jp-textMuted animate-pulse">Preparando login Google...</div>
-        </div>
+        <button type="submit" id="btn-login-submit"
+          class="w-full min-h-[46px] rounded-xl bg-gradient-to-r from-jp-accent to-blue-600 hover:from-blue-500 hover:to-blue-600 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-glow-blue flex items-center justify-center gap-2 transition-all cursor-pointer">
+          <span id="login-btn-text">Entrar no Painel</span>
+          <svg id="login-spinner" class="hidden w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.3"/>
+            <path d="M12 2a10 10 0 0 1 10 10" stroke="white" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </form>
 
-        <!-- Mensagem de Ajuda se Client ID estiver ausente -->
-        <p id="auth-config-notice" class="hidden text-[11px] text-jp-textDim leading-tight">
-          Configure seu <code class="text-jp-accent font-mono">google_client_id</code> no arquivo <code class="text-jp-textSub font-mono">config/authorized_users.json</code>.
-        </p>
+      <!-- Divisor e Botão Google Oficial (Se Client ID configurado) -->
+      <div id="google-login-section" class="hidden space-y-3 pt-2 border-t border-jp-border/70">
+        <span class="text-[11px] font-bold text-jp-textDim uppercase block">Ou acesse com o Google</span>
+        <div id="g_id_signin_container" class="flex justify-center"></div>
       </div>
 
-      <div class="border-t border-jp-border/70 pt-4">
-        <p class="text-[11px] text-jp-textDim">Jump Park Worker Security • 2026</p>
+      <div class="pt-2 text-[10px] text-jp-textDim">
+        Jump Park Worker Security • Whitelist JSON
       </div>
     </div>
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
-  <!-- 📱 CABEÇALHO PRINCIPAL (COM PERFIL GOOGLE & LOGOUT) 📱 -->
+  <!-- 📱 CABEÇALHO PRINCIPAL (COM PERFIL DO OPERADOR & LOGOUT) 📱 -->
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
   <header class="w-full max-w-4xl mx-auto px-3 sm:px-4 pt-3 sm:pt-5 pb-2">
     <div class="bg-jp-surface border border-jp-border rounded-2xl px-3.5 py-3 sm:px-5 sm:py-3.5 flex items-center justify-between shadow-card">
@@ -226,16 +236,15 @@
       <!-- Área do Usuário Autenticado & Botão Atualizar -->
       <div class="flex items-center gap-2 sm:gap-3">
         
-        <!-- Perfil do Usuário Logado -->
+        <!-- Badge do Operador Logado -->
         <div id="user-profile-badge" class="hidden items-center gap-2 px-2.5 py-1 rounded-xl bg-jp-surface2 border border-jp-border">
-          <img id="user-avatar" src="" alt="Avatar" class="w-6 h-6 rounded-full border border-jp-accent/50 hidden" />
           <div id="user-avatar-initial" class="w-6 h-6 rounded-full bg-jp-accent/20 text-jp-accent font-bold text-xs flex items-center justify-center">
             U
           </div>
-          <span id="user-name-display" class="text-xs font-bold text-jp-text truncate max-w-[90px] sm:max-w-[140px]">
+          <span id="user-name-display" class="text-xs font-bold text-jp-text truncate max-w-[85px] sm:max-w-[140px]">
             Operador
           </span>
-          <button onclick="fazerLogout()" title="Sair da conta" class="text-jp-textMuted hover:text-red-400 text-xs font-bold ml-1 transition-colors">
+          <button onclick="fazerLogout()" title="Sair da conta" class="text-jp-textMuted hover:text-red-400 text-[11px] font-bold ml-1 transition-colors">
             Sair
           </button>
         </div>
@@ -282,7 +291,7 @@
             oninput="formatarPlacaInput(this)" />
         </div>
 
-        <!-- SEU NOME / OPERADOR (PREENCHIDO AUTOMATICAMENTE PELO GOOGLE) -->
+        <!-- SEU NOME / OPERADOR -->
         <div class="space-y-1">
           <label for="responsavel" class="text-xs font-bold text-jp-textSub flex items-center justify-between">
             <span>Seu Nome / Operador <span class="text-jp-red">*</span></span>
@@ -532,7 +541,7 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
-  <!-- 📜 SCRIPT DE LÓGICA DO FRONTEND STANDALONE & AUTH GOOGLE 📜 -->
+  <!-- 📜 SCRIPT DE LÓGICA DO FRONTEND STANDALONE & AUTENTICAÇÃO 📜 -->
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
   <script>
     /* ──────────────────────────────────────────
@@ -548,7 +557,7 @@
     var usuarioLogado    = null;
 
     /* ──────────────────────────────────────────
-       Autenticação Google & Permissões
+       Autenticação & Permissões
     ────────────────────────────────────────── */
     function getAuthHeaders() {
       var token = localStorage.getItem('jp_auth_token');
@@ -569,25 +578,23 @@
         console.warn('Falha ao verificar config de auth:', e);
       }
 
-      // Se autenticação estiver ativa
+      var tokenSalvo = localStorage.getItem('jp_auth_token');
+      if (tokenSalvo) {
+        try {
+          var meRes = await fetch('/api/auth/me', { headers: getAuthHeaders() });
+          if (meRes.ok) {
+            usuarioLogado = await meRes.json();
+            aplicarUsuarioLogado(usuarioLogado);
+            return true;
+          }
+        } catch (e) {}
+      }
+
+      // Se não autenticado e auth estiver ativa
       if (authConfig.auth_enabled) {
-        var tokenSalvo = localStorage.getItem('jp_auth_token');
-        if (tokenSalvo) {
-          try {
-            var meRes = await fetch('/api/auth/me', { headers: getAuthHeaders() });
-            if (meRes.ok) {
-              usuarioLogado = await meRes.json();
-              aplicarUsuarioLogado(usuarioLogado);
-              return true;
-            }
-          } catch (e) {}
-        }
-        
-        // Se não tiver token ou for inválido, exibe tela de login
         exibirTelaLogin();
         return false;
       } else {
-        // Modo sem autenticação obrigatória
         recuperarOperadorSalvo();
         return true;
       }
@@ -597,13 +604,75 @@
       var overlay = document.getElementById('login-overlay');
       overlay.classList.remove('hidden');
 
-      if (authConfig.google_client_id && window.google) {
-        inicializarGoogleGIS();
-      } else {
-        document.getElementById('auth-config-notice').classList.remove('hidden');
-        document.getElementById('g_id_signin_container').innerHTML = 
-          '<div class="text-xs text-amber-400 font-semibold p-2 bg-amber-950/40 rounded-xl border border-amber-500/30">Google Client ID não informado no JSON.<br>Adicione o client ID para ativar o login oficial.</div>';
+      // Tenta recuperar último e-mail digitado no dispositivo
+      var emailSalvo = localStorage.getItem('jp_operator_email');
+      if (emailSalvo) {
+        document.getElementById('login-email-input').value = emailSalvo;
       }
+
+      // Se Google Client ID configurado, ativa Google Sign-in também
+      if (authConfig.google_client_id && window.google) {
+        document.getElementById('google-login-section').classList.remove('hidden');
+        inicializarGoogleGIS();
+      }
+    }
+
+    async function realizarLoginEmail(event) {
+      if (event) event.preventDefault();
+
+      var emailInput = document.getElementById('login-email-input');
+      var email = emailInput.value.trim().toLowerCase();
+      var btnSubmit = document.getElementById('btn-login-submit');
+      var btnText = document.getElementById('login-btn-text');
+      var spinner = document.getElementById('login-spinner');
+      var errorBox = document.getElementById('auth-error-box');
+
+      if (!email || !email.includes('@')) {
+        mostrarErroLogin('Por favor, informe um e-mail válido.');
+        return;
+      }
+
+      errorBox.classList.add('hidden');
+      btnSubmit.disabled = true;
+      btnText.textContent = 'Verificando...';
+      spinner.classList.remove('hidden');
+
+      try {
+        var res = await fetch('/api/auth/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email })
+        });
+
+        var data = await res.json();
+        btnSubmit.disabled = false;
+        btnText.textContent = 'Entrar no Painel';
+        spinner.classList.add('hidden');
+
+        if (res.ok && data.status === 'ok') {
+          localStorage.setItem('jp_auth_token', data.token);
+          localStorage.setItem('jp_operator_email', email);
+          usuarioLogado = data.user;
+          aplicarUsuarioLogado(usuarioLogado);
+
+          document.getElementById('login-overlay').classList.add('hidden');
+          mostrarFeedback('✅ Bem-vindo(a), ' + usuarioLogado.name + '!', 'ok');
+          carregarHistorico(true);
+        } else {
+          mostrarErroLogin(data.detail || 'E-mail não autorizado a acessar este painel.');
+        }
+      } catch (err) {
+        btnSubmit.disabled = false;
+        btnText.textContent = 'Entrar no Painel';
+        spinner.classList.add('hidden');
+        mostrarErroLogin('Falha ao conectar com o servidor: ' + err.message);
+      }
+    }
+
+    function mostrarErroLogin(msg) {
+      var errorBox = document.getElementById('auth-error-box');
+      document.getElementById('auth-error-msg').textContent = msg;
+      errorBox.classList.remove('hidden');
     }
 
     function inicializarGoogleGIS() {
@@ -623,10 +692,10 @@
           size: 'large',
           text: 'signin_with',
           shape: 'pill',
-          width: 260
+          width: 250
         });
 
-        google.accounts.id.prompt(); // Google One Tap
+        google.accounts.id.prompt();
       } catch (err) {
         console.error('Erro ao inicializar Google GIS:', err);
       }
@@ -634,9 +703,6 @@
 
     async function handleGoogleLoginResponse(response) {
       if (!response.credential) return;
-
-      var errorBox = document.getElementById('auth-error-box');
-      errorBox.classList.add('hidden');
 
       try {
         var res = await fetch('/api/auth/google', {
@@ -656,15 +722,10 @@
           mostrarFeedback('✅ Bem-vindo(a), ' + usuarioLogado.name + '!', 'ok');
           carregarHistorico(true);
         } else {
-          // Erro ou Acesso Proibido
-          document.getElementById('auth-error-title').textContent = res.status === 403 ? 'Acesso Não Autorizado' : 'Falha no Login';
-          document.getElementById('auth-error-msg').textContent = data.detail || 'Não foi possível validar seu acesso.';
-          errorBox.classList.remove('hidden');
+          mostrarErroLogin(data.detail || 'Não foi possível validar o login Google.');
         }
       } catch (err) {
-        document.getElementById('auth-error-title').textContent = 'Erro de Comunicação';
-        document.getElementById('auth-error-msg').textContent = 'Falha ao conectar com o servidor: ' + err.message;
-        errorBox.classList.remove('hidden');
+        mostrarErroLogin('Falha na comunicação com o servidor: ' + err.message);
       }
     }
 
@@ -672,25 +733,14 @@
       if (!user) return;
       var badge = document.getElementById('user-profile-badge');
       var nameEl = document.getElementById('user-name-display');
-      var avatar = document.getElementById('user-avatar');
       var initial = document.getElementById('user-avatar-initial');
       var respInput = document.getElementById('responsavel');
 
       badge.classList.remove('hidden');
       badge.classList.add('flex');
       nameEl.textContent = user.name || user.email;
+      initial.textContent = (user.name || user.email || 'U').charAt(0).toUpperCase();
 
-      if (user.picture) {
-        avatar.src = user.picture;
-        avatar.classList.remove('hidden');
-        initial.classList.add('hidden');
-      } else {
-        avatar.classList.add('hidden');
-        initial.textContent = (user.name || 'U').charAt(0).toUpperCase();
-        initial.classList.remove('hidden');
-      }
-
-      // Preenche o campo operador com o nome da conta Google
       if (respInput) {
         respInput.value = user.name || user.email.split('@')[0];
         salvarOperador(respInput.value);

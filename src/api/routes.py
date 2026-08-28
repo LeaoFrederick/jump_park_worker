@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api.auth import (
     create_session_token,
+    format_display_name_from_email,
     get_current_user,
     get_google_client_id,
     is_email_authorized,
@@ -97,6 +98,10 @@ class GoogleAuthPayload(BaseModel):
     credential: str
 
 
+class EmailAuthPayload(BaseModel):
+    email: str
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Rotas — Autenticação Google & Permissões
 # ──────────────────────────────────────────────────────────────────────────────
@@ -109,6 +114,41 @@ def auth_config():
     return {
         "auth_enabled": bool(client_id or authorized_list),
         "google_client_id": client_id,
+    }
+
+
+@app.post("/api/auth/email")
+def auth_email(payload: EmailAuthPayload):
+    """
+    Valida se o e-mail informado consta na whitelist de authorized_users.json
+    e retorna a sessão autenticada.
+    """
+    email = payload.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(
+            status_code=400,
+            detail="Por favor, informe um endereço de e-mail válido.",
+        )
+
+    if not is_email_authorized(email):
+        log.warning("[AUTH] Tentativa de login negada para e-mail não autorizado: %s", email)
+        raise HTTPException(
+            status_code=403,
+            detail=f"O e-mail '{email}' não está autorizado a acessar este painel. Solicite permissão ao administrador.",
+        )
+
+    name = format_display_name_from_email(email)
+    user_info = {
+        "email": email,
+        "name": name,
+        "picture": "",
+    }
+    token = create_session_token(user_info)
+    log.info("[AUTH] Operador %s (%s) autenticado com sucesso via e-mail.", name, email)
+    return {
+        "status": "ok",
+        "token": token,
+        "user": user_info,
     }
 
 

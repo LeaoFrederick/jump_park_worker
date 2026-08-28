@@ -139,6 +139,24 @@ def verify_google_token(credential: str) -> Optional[dict]:
         return None
 
 
+def format_display_name_from_email(email: str) -> str:
+    """Extrai e formata um nome amigável a partir do e-mail."""
+    if not email or "@" not in email:
+        return "Operador"
+    name_part = email.split("@")[0].strip()
+    import re
+    clean = re.sub(r"\d+$", "", name_part).replace(".", " ").replace("_", " ").replace("-", " ").strip()
+    parts = clean.split()
+    if parts:
+        formatted = " ".join(p.capitalize() for p in parts)
+        if "frederick" in formatted.lower():
+            return "Frederick"
+        if "francisco" in formatted.lower():
+            return "Francisco"
+        return formatted
+    return name_part.capitalize()
+
+
 def create_session_token(user_data: dict) -> str:
     """Gera um token de sessão assinado com HMAC-SHA256."""
     payload = {
