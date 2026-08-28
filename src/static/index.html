@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#080c14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Jump Park" />
+  <title>Jump Park — Painel de Operação</title>
+  
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            app: {
+              bg: '#080c14',
+              surface: '#111722',
+              card: '#141c28',
+              surface2: '#17202e',
+              hover: '#1c2738',
+              border: '#253346',
+              accent: '#388bfd',
+              accentHover: '#2a75e6',
+              purple: '#a371f7',
+              red: '#f85149',
+              redDark: '#e53e3e',
+              green: '#3fb950',
+              greenDark: '#2ea043',
+              yellow: '#d29922',
+              text: '#f8fafc',
+              textSub: '#cbd5e1',
+              textMuted: '#94a3b8',
+              textDim: '#64748b'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          boxShadow: {
+            'card': '0 8px 30px rgba(0, 0, 0, 0.5)',
+            'glow-blue': '0 0 20px rgba(56, 139, 253, 0.35)',
+            'glow-red': '0 8px 25px rgba(229, 62, 62, 0.45)',
+            'glow-green': '0 8px 25px rgba(46, 160, 67, 0.45)'
+          },
+          animation: {
+            'pulse-fast': 'pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'shimmer': 'shimmer 1.8s infinite linear',
+            'slide-down': 'slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            'fade-in': 'fadeIn 0.2s ease-out'
+          },
+          keyframes: {
+            shimmer: {
+              '0%': { backgroundPosition: '-200% 0' },
+              '100%': { backgroundPosition: '200% 0' }
+            },
+            slideDown: {
+              '0%': { opacity: '0', transform: 'translateY(-10px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' }
+            },
+            fadeIn: {
+              '0%': { opacity: '0' },
+              '100%': { opacity: '1' }
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Estilos Customizados & Otimizações Touch */
+    *, *::before, *::after {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #080c14;
+      color: #f8fafc;
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .skeleton-box {
+      background: linear-gradient(90deg, #17202e 25%, #253346 50%, #17202e 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    .plate-mercosul-header {
+      background: linear-gradient(180deg, #003399 0%, #002266 100%);
+    }
+    /* Scrollbar estilizada */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #080c14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #253346;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #388bfd;
+    }
+  </style>
+</head>
+<body class="bg-app-bg text-app-text antialiased selection:bg-app-accent selection:text-white flex flex-col min-h-screen">
+
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <!-- 🌟 TELA DE CARREGAMENTO INICIAL (SPLASH SCREEN & LOADING OVERLAY) 🌟 -->
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="loading-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-app-bg transition-all duration-500 ease-out px-6">
+    <div class="relative flex flex-col items-center max-w-sm w-full text-center">
+      <!-- Glow Decorativo -->
+      <div class="absolute -top-16 w-44 h-44 bg-app-accent/25 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-10 w-36 h-36 bg-app-purple/20 rounded-full blur-2xl pointer-events-none"></div>
+
+      <!-- Ícone Animado -->
+      <div class="relative mb-6">
+        <div class="w-24 h-24 rounded-3xl bg-gradient-to-tr from-app-accent to-app-purple flex items-center justify-center shadow-glow-blue animate-pulse">
+          <svg class="w-12 h-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </div>
+        <div class="absolute -inset-2 rounded-[28px] border-2 border-app-accent/40 animate-ping opacity-30 pointer-events-none"></div>
+      </div>
+
+      <!-- Títulos -->
+      <h2 class="text-2xl sm:text-3xl font-black tracking-tight text-white mb-2">
+        Jump Park <span class="bg-gradient-to-r from-app-accent to-app-purple bg-clip-text text-transparent">Central</span>
+      </h2>
+      <p class="text-app-textMuted text-sm sm:text-base font-medium mb-6">Painel de Bloqueio e Desbloqueio</p>
+
+      <!-- Barra de Progresso Animada -->
+      <div class="w-full bg-app-surface2 rounded-full h-2 overflow-hidden border border-app-border mb-3">
+        <div id="loading-bar" class="bg-gradient-to-r from-app-accent via-app-purple to-app-accent h-full w-1/3 rounded-full transition-all duration-300 animate-pulse"></div>
+      </div>
+
+      <!-- Mensagem de Status -->
+      <div class="flex items-center gap-2 text-xs font-semibold text-app-textSub" id="loading-status-text">
+        <span class="w-2 h-2 rounded-full bg-app-accent animate-ping"></span>
+        <span>Conectando à central Jump Park...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <!-- 📱 CABEÇALHO PRINCIPAL (RESPONSIVO) 📱 -->
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <header class="sticky top-0 z-30 bg-app-surface/90 backdrop-blur-md border-b border-app-border px-4 py-3 sm:py-4 shadow-card">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+      <!-- Marca / Logo -->
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 sm:w-13 sm:h-13 rounded-2xl bg-gradient-to-tr from-app-accent to-app-purple flex items-center justify-center text-white shadow-glow-blue shrink-0">
+          <svg class="w-6 h-6 sm:w-7 sm:h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-black tracking-tight text-white leading-tight">
+              JUMP PARK
+            </h1>
+            <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-app-accent/20 text-app-accent border border-app-accent/30 uppercase tracking-wide">
+              PROD
+            </span>
+          </div>
+          <p class="text-xs sm:text-sm font-semibold text-app-textMuted">Painel de Restrições</p>
+        </div>
+      </div>
+
+      <!-- Status de Conexão & Botão de Atualizar -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Status Pill -->
+        <div id="connection-badge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="hidden xs:inline" id="connection-text">Online</span>
+        </div>
+
+        <!-- Botão Atualizar -->
+        <button id="btn-global-refresh" onclick="recarregarTudo()" title="Atualizar histórico e status"
+          class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-app-surface2 hover:bg-app-hover active:scale-95 border border-app-border text-app-text flex items-center justify-center transition-all duration-150">
+          <svg id="refresh-icon" class="w-5 h-5 text-app-textSub" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <!-- 🖥️ CONTEÚDO PRINCIPAL (DASHBOARD GRID RESPONSIVO) 🖥️ -->
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+    <!-- Grid de 2 Colunas no Desktop / 1 Coluna no Mobile e Tablet -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- ──────────────────────────────────────────────────────────────────────── -->
+      <!-- COLUNA ESQUERDA: ESTAÇÃO DE AÇÃO (BLOQUEIO / DESBLOQUEIO) -->
+      <!-- ──────────────────────────────────────────────────────────────────────── -->
+      <section class="lg:col-span-5 bg-app-surface border border-app-border rounded-3xl p-5 sm:p-6 shadow-card space-y-5">
+        
+        <!-- Header da Seção -->
+        <div class="flex items-center justify-between border-b border-app-border/80 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-3.5 h-3.5 rounded-full bg-app-accent shadow-[0_0_12px_#388bfd]"></span>
+            <h2 class="text-lg sm:text-xl font-extrabold tracking-wide text-white uppercase">
+              Estação de Operação
+            </h2>
+          </div>
+          <span class="text-xs font-bold text-app-textMuted px-2.5 py-1 rounded-lg bg-app-surface2 border border-app-border">
+            Ação Rápida
+          </span>
+        </div>
+
+        <!-- Formulário de Operação -->
+        <form id="action-form" onsubmit="event.preventDefault();" class="space-y-4">
+          
+          <!-- PLACA (Simulação Visual Mercosul & Input) -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label for="placa" class="text-sm font-bold text-app-textSub flex items-center gap-1">
+                Placa do Veículo <span class="text-app-red">*</span>
+              </label>
+              <span class="text-[11px] font-semibold text-app-textMuted">Padrão Mercosul / Antigo</span>
+            </div>
+
+            <!-- Card Visual da Placa -->
+            <div class="relative rounded-2xl overflow-hidden border-2 border-app-border focus-within:border-app-accent transition-all duration-200 bg-[#090e17] shadow-inner">
+              <!-- Faixa Azul Mercosul -->
+              <div class="plate-mercosul-header px-3 py-1 flex items-center justify-between text-white select-none">
+                <div class="flex items-center gap-1.5">
+                  <!-- Emblema Mercosul Simplificado -->
+                  <div class="w-3.5 h-3.5 rounded-full border border-white/80 flex items-center justify-center text-[7px] font-black">
+                    M
+                  </div>
+                  <span class="text-[11px] font-black tracking-wider">BRASIL</span>
+                </div>
+                <!-- Bandeira Brasil Mini -->
+                <div class="w-5 h-3 bg-emerald-600 rounded-[2px] flex items-center justify-center overflow-hidden">
+                  <div class="w-2.5 h-1.5 bg-yellow-400 rotate-45 flex items-center justify-center">
+                    <div class="w-1 h-1 bg-blue-700 rounded-full"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Input Real da Placa -->
+              <input type="text" id="placa" maxlength="8" placeholder="BRA2E19" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+                class="w-full bg-transparent text-center font-mono text-3xl sm:text-4xl font-black tracking-widest text-white py-3 sm:py-4 px-2 outline-none uppercase placeholder:text-app-textDim placeholder:tracking-normal placeholder:font-sans placeholder:text-lg"
+                oninput="formatarPlacaInput(this)" />
+            </div>
+          </div>
+
+          <!-- MOTIVO -->
+          <div class="space-y-1.5">
+            <label for="motivo" class="text-sm font-bold text-app-textSub">
+              Motivo do Bloqueio / Desbloqueio
+            </label>
+            <textarea id="motivo" rows="2" placeholder="Ex: Débito de diárias anteriores, restrição judicial, etc."
+              class="w-full bg-app-surface2 border border-app-border rounded-2xl p-3.5 text-base font-medium text-app-text placeholder:text-app-textDim outline-none focus:border-app-accent focus:ring-2 focus:ring-app-accent/20 transition-all resize-none"></textarea>
+          </div>
+
+          <!-- OPERADOR / RESPONSÁVEL -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label for="responsavel" class="text-sm font-bold text-app-textSub flex items-center gap-1">
+                Operador / Responsável <span class="text-app-red">*</span>
+              </label>
+              <span class="text-[11px] font-semibold text-app-textMuted">Salvo automaticamente</span>
+            </div>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-textMuted">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
+              <input type="text" id="responsavel" placeholder="Ex: Frederick ou seu nome"
+                class="w-full bg-app-surface2 border border-app-border rounded-2xl pl-11 pr-4 py-3.5 text-base font-semibold text-app-text placeholder:text-app-textDim outline-none focus:border-app-accent focus:ring-2 focus:ring-app-accent/20 transition-all"
+                onchange="salvarOperador(this.value)" />
+            </div>
+          </div>
+
+          <!-- BOTÕES DE AÇÃO TOUCH GRANDES -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <!-- Botão Bloquear -->
+            <button type="button" id="btn-bloquear" onclick="executarAcao('bloquear')"
+              class="group relative min-h-[66px] sm:min-h-[72px] rounded-2xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 active:scale-[0.98] shadow-glow-red text-white font-extrabold text-lg sm:text-xl flex items-center justify-center gap-3 transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+              <svg id="icon-block" class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <svg id="spin-block" class="hidden w-6 h-6 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.3"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="white" stroke-linecap="round"/>
+              </svg>
+              <span>BLOQUEAR</span>
+            </button>
+
+            <!-- Botão Desbloquear -->
+            <button type="button" id="btn-desbloquear" onclick="executarAcao('desbloquear')"
+              class="group relative min-h-[66px] sm:min-h-[72px] rounded-2xl bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-500 hover:to-green-600 active:scale-[0.98] shadow-glow-green text-white font-extrabold text-lg sm:text-xl flex items-center justify-center gap-3 transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+              <svg id="icon-unblock" class="w-6 h-6 shrink-0 transition-transform group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+              </svg>
+              <svg id="spin-unblock" class="hidden w-6 h-6 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.3"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="white" stroke-linecap="round"/>
+              </svg>
+              <span>DESBLOQUEAR</span>
+            </button>
+          </div>
+
+          <!-- FEEDBACK / TOAST DE RESULTADO -->
+          <div id="feedback-box" class="hidden rounded-2xl p-4 text-sm sm:text-base font-bold animate-slide-down border"></div>
+        </form>
+      </section>
+
+      <!-- ──────────────────────────────────────────────────────────────────────── -->
+      <!-- COLUNA DIREITA: HISTÓRICO & MONITORAMENTO EM TEMPO REAL -->
+      <!-- ──────────────────────────────────────────────────────────────────────── -->
+      <section class="lg:col-span-7 bg-app-surface border border-app-border rounded-3xl p-5 sm:p-6 shadow-card space-y-5">
+        
+        <!-- Header da Seção & Resumo -->
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-app-border/80 pb-4">
+          <div class="flex items-center gap-3">
+            <span class="w-3.5 h-3.5 rounded-full bg-app-purple shadow-[0_0_12px_#a371f7]"></span>
+            <div>
+              <h2 class="text-lg sm:text-xl font-extrabold tracking-wide text-white uppercase">
+                Histórico de Eventos
+              </h2>
+              <p class="text-xs text-app-textMuted font-medium">Registros sincronizados do banco de dados</p>
+            </div>
+          </div>
+
+          <!-- Contador Total Badge -->
+          <div id="badge-total-eventos" class="px-3 py-1.5 rounded-full text-xs font-bold bg-app-surface2 border border-app-border text-app-textSub">
+            Carregando...
+          </div>
+        </div>
+
+        <!-- BARRA DE BUSCA & FILTROS RÁPIDOS -->
+        <div class="space-y-3">
+          <!-- Campo de Busca -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-app-textMuted">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.35-4.35"/>
+              </svg>
+            </div>
+            <input type="text" id="search-placa" placeholder="Buscar por placa ou operador..." autocomplete="off"
+              class="w-full bg-app-surface2 border border-app-border rounded-2xl pl-11 pr-10 py-3 text-sm sm:text-base font-semibold text-app-text placeholder:text-app-textDim outline-none focus:border-app-accent focus:ring-2 focus:ring-app-accent/20 transition-all uppercase"
+              oninput="onSearchInput()" />
+            <button id="btn-clear-search" onclick="limparBusca()" class="hidden absolute inset-y-0 right-0 pr-3.5 flex items-center text-app-textMuted hover:text-white">
+              ✕
+            </button>
+          </div>
+
+          <!-- Filtros Rápidos (Dropdowns) -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <!-- Tipo -->
+            <select id="f-evento" onchange="onFiltroChange()" class="bg-app-surface2 border border-app-border rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold text-app-textSub outline-none focus:border-app-accent">
+              <option value="">Todos os Tipos</option>
+              <option value="BLOQUEIO">🔒 Bloqueio</option>
+              <option value="DESBLOQUEIO">🔓 Desbloqueio</option>
+            </select>
+
+            <!-- Método -->
+            <select id="f-metodo" onchange="onFiltroChange()" class="bg-app-surface2 border border-app-border rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold text-app-textSub outline-none focus:border-app-accent">
+              <option value="">Todos Métodos</option>
+              <option value="MANUAL">Manual</option>
+              <option value="AUTOMATICO">Automático</option>
+            </select>
+
+            <!-- Operador -->
+            <select id="f-autor" onchange="onFiltroChange()" class="col-span-2 sm:col-span-1 bg-app-surface2 border border-app-border rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold text-app-textSub outline-none focus:border-app-accent">
+              <option value="">Todos Usuários</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- LISTA DE CARDS DE HISTÓRICO -->
+        <div id="events-list" class="space-y-3 min-h-[300px]">
+          <!-- Skeleton Loaders iniciais -->
+          <div class="space-y-3">
+            <div class="skeleton-box rounded-2xl h-28 w-full"></div>
+            <div class="skeleton-box rounded-2xl h-28 w-full"></div>
+            <div class="skeleton-box rounded-2xl h-28 w-full"></div>
+          </div>
+        </div>
+
+        <!-- PAGINAÇÃO RESPONSIVA -->
+        <div id="pagination-container" class="hidden flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-app-border/80">
+          <div class="flex items-center gap-3 text-xs sm:text-sm font-semibold text-app-textMuted">
+            <span id="pagination-info">0–0 de 0</span>
+            <div class="flex items-center gap-1.5">
+              <span>Exibir:</span>
+              <select id="page-size" onchange="onPageSizeChange()" class="bg-app-surface2 border border-app-border rounded-lg px-2 py-1 text-xs font-bold text-app-text outline-none">
+                <option value="10" selected>10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button id="btn-prev-page" onclick="mudarPagina(-1)" class="px-3.5 py-2 rounded-xl bg-app-surface2 hover:bg-app-hover active:scale-95 border border-app-border text-xs sm:text-sm font-bold text-app-textSub disabled:opacity-40 disabled:pointer-events-none transition-all">
+              ◀ Anterior
+            </button>
+            <div id="page-indicator" class="px-3 py-1.5 rounded-xl bg-app-card border border-app-border text-xs font-mono font-bold text-app-accent">
+              1 / 1
+            </div>
+            <button id="btn-next-page" onclick="mudarPagina(1)" class="px-3.5 py-2 rounded-xl bg-app-surface2 hover:bg-app-hover active:scale-95 border border-app-border text-xs sm:text-sm font-bold text-app-textSub disabled:opacity-40 disabled:pointer-events-none transition-all">
+              Próxima ▶
+            </button>
+          </div>
+        </div>
+
+      </section>
+    </div>
+  </main>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <!-- 🔍 MODAL CENTRALIZADO DE DETALHES DO REGISTRO 🔍 -->
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="modal-overlay" onclick="fecharModal(event)" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4 transition-all duration-200">
+    <div id="modal-content" class="bg-app-surface border border-app-border rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-slide-down">
+      
+      <!-- Cabeçalho do Modal -->
+      <div class="flex items-start justify-between border-b border-app-border pb-3">
+        <div>
+          <h3 id="m-modal-title" class="text-xl font-black text-white">Registro #0</h3>
+          <p class="text-xs text-app-textMuted">Detalhes completos auditados do evento</p>
+        </div>
+        <button onclick="fecharModalDireto()" class="w-9 h-9 rounded-full bg-app-surface2 hover:bg-app-hover text-app-textMuted hover:text-white flex items-center justify-center text-lg font-bold transition-all">
+          ✕
+        </button>
+      </div>
+
+      <!-- Grid de Metadados -->
+      <div class="grid grid-cols-2 gap-3 text-left">
+        <!-- Placa -->
+        <div class="bg-app-card p-3 rounded-2xl border border-app-border/80">
+          <span class="text-[11px] font-bold text-app-textMuted uppercase block">Placa</span>
+          <div class="flex items-center justify-between mt-1">
+            <span id="m-placa" class="font-mono text-xl font-black text-white tracking-wider">—</span>
+            <button onclick="copiarPlacaModal()" title="Copiar Placa" class="text-xs px-2 py-1 rounded bg-app-surface2 hover:bg-app-hover border border-app-border text-app-accent font-bold">
+              Copiar
+            </button>
+          </div>
+        </div>
+
+        <!-- Tipo / Evento -->
+        <div class="bg-app-card p-3 rounded-2xl border border-app-border/80">
+          <span class="text-[11px] font-bold text-app-textMuted uppercase block">Ação</span>
+          <div id="m-evento" class="mt-1">—</div>
+        </div>
+
+        <!-- Data & Hora -->
+        <div class="bg-app-card p-3 rounded-2xl border border-app-border/80">
+          <span class="text-[11px] font-bold text-app-textMuted uppercase block">Data e Hora</span>
+          <span id="m-timestamp" class="text-sm font-semibold text-app-textSub mt-1 block">—</span>
+        </div>
+
+        <!-- Método -->
+        <div class="bg-app-card p-3 rounded-2xl border border-app-border/80">
+          <span class="text-[11px] font-bold text-app-textMuted uppercase block">Método</span>
+          <div id="m-metodo" class="mt-1">—</div>
+        </div>
+
+        <!-- Usuário / Operador -->
+        <div class="col-span-2 bg-app-card p-3 rounded-2xl border border-app-border/80">
+          <span class="text-[11px] font-bold text-app-textMuted uppercase block">Operador / Autor</span>
+          <span id="m-autor" class="text-sm font-bold text-app-text mt-1 block">—</span>
+        </div>
+
+        <!-- Taxa / Financeiro -->
+        <div class="bg-app-card p-3 rounded-2xl border border-app-border/80">
+          <span class="text-[11px] font-bold text-app-textMuted uppercase block">Valor Taxa</span>
+          <span id="m-valor" class="text-sm font-bold text-emerald-400 mt-1 block">—</span>
+        </div>
+
+        <!-- Estabelecimentos Afetados -->
+        <div class="bg-app-card p-3 rounded-2xl border border-app-border/80">
+          <span class="text-[11px] font-bold text-app-textMuted uppercase block">Unidades</span>
+          <span id="m-estabelecimentos" class="text-xs font-semibold text-app-textSub mt-1 block truncate" title="">—</span>
+        </div>
+
+        <!-- Motivo Completo -->
+        <div class="col-span-2 bg-app-card p-3 rounded-2xl border border-app-border/80">
+          <span class="text-[11px] font-bold text-app-textMuted uppercase block">Motivo Informado</span>
+          <p id="m-motivo" class="text-sm font-medium text-app-text mt-1 whitespace-pre-wrap leading-relaxed">—</p>
+        </div>
+      </div>
+
+      <!-- Botão Fechar -->
+      <button onclick="fecharModalDireto()" class="w-full py-3.5 rounded-2xl bg-app-surface2 hover:bg-app-hover border border-app-border text-white font-bold text-base transition-all">
+        Fechar Detalhes
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <!-- 📜 SCRIPT DE LÓGICA DO FRONTEND STANDALONE 📜 -->
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <script>
+    /* ──────────────────────────────────────────
+       Estado Global da Aplicação
+    ────────────────────────────────────────── */
+    var todosEventos     = [];
+    var eventosFiltrados = [];
+    var paginaAtual      = 1;
+    var tamanhoPagina    = 10;
+    var debounceTimer    = null;
+
+    /* ──────────────────────────────────────────
+       Formatação & Tratamento de Nome de Usuário
+    ────────────────────────────────────────── */
+    function formatarAutor(autorRaw) {
+      if (!autorRaw) return 'Operador';
+      var nome = String(autorRaw).trim();
+
+      // Remove "(Discord)", "[Discord]", "Discord: ..."
+      nome = nome.replace(/\s*[\(\[]?\s*discord\s*[\)\]]?/gi, '');
+      nome = nome.replace(/^discord\s*:\s*/gi, '');
+
+      // Remove e-mails entre parênteses "(user@domain.com)"
+      nome = nome.replace(/\s*\([^)]*@[^)]*\)/gi, '');
+
+      // Se for formato email puro, pega antes do @
+      if (nome.includes('@') && !nome.includes(' ')) {
+        nome = nome.split('@')[0];
+      }
+
+      nome = nome.trim();
+
+      // Padroniza Frederick
+      if (/^le[aã]o\s+frederick$/i.test(nome) || /^frederick\s+le[aã]o$/i.test(nome)) {
+        return 'Frederick';
+      }
+
+      return nome || 'Operador';
+    }
+
+    /* ──────────────────────────────────────────
+       Máscara e Formatação da Placa em Tempo Real
+    ────────────────────────────────────────── */
+    function formatarPlacaInput(input) {
+      // Remove caracteres não alfanuméricos e força caixa alta
+      var valor = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (valor.length > 7) {
+        valor = valor.substring(0, 7);
+      }
+      input.value = valor;
+    }
+
+    /* ──────────────────────────────────────────
+       Persistência do Nome do Operador
+    ────────────────────────────────────────── */
+    function salvarOperador(nome) {
+      try {
+        if (nome && nome.trim()) {
+          localStorage.setItem('jp_operator_name', nome.trim());
+        }
+      } catch (e) {}
+    }
+
+    function recuperarOperadorSalvo() {
+      try {
+        var salvo = localStorage.getItem('jp_operator_name');
+        if (salvo) {
+          document.getElementById('responsavel').value = salvo;
+        }
+      } catch (e) {}
+    }
+
+    /* ──────────────────────────────────────────
+       Executar Bloqueio / Desbloqueio (API Direct Fetch)
+    ────────────────────────────────────────── */
+    async function executarAcao(acao) {
+      var placaInput   = document.getElementById('placa');
+      var motivoInput  = document.getElementById('motivo');
+      var respInput    = document.getElementById('responsavel');
+
+      var placa       = placaInput.value.trim().toUpperCase();
+      var motivo      = motivoInput.value.trim();
+      var responsavel = respInput.value.trim();
+
+      if (!placa || placa.length < 7) {
+        mostrarFeedback('⚠️ Informe uma placa válida com pelo menos 7 caracteres.', 'warn');
+        placaInput.focus();
+        return;
+      }
+
+      if (!responsavel) {
+        mostrarFeedback('⚠️ Informe seu nome no campo Operador.', 'warn');
+        respInput.focus();
+        return;
+      }
+
+      salvarOperador(responsavel);
+      setLoading(acao, true);
+      ocultarFeedback();
+
+      var payload = {
+        plate: placa,
+        reason: motivo,
+        autor: formatarAutor(responsavel)
+      };
+
+      try {
+        var response = await fetch('/api/' + acao, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        var data = await response.json();
+        setLoading(acao, false);
+
+        if (response.ok) {
+          var statusTipo = data.status === 'already_blocked' || data.status === 'not_found' ? 'warn' : 'ok';
+          var icone = statusTipo === 'ok' ? '✅ ' : '⚠️ ';
+          mostrarFeedback(icone + (data.message || 'Operação realizada com sucesso.'), statusTipo);
+
+          // Limpa campos após sucesso
+          if (statusTipo === 'ok' || data.status === 'partial') {
+            placaInput.value = '';
+            motivoInput.value = '';
+            carregarHistorico(false); // Atualiza histórico
+          }
+        } else {
+          mostrarFeedback('❌ ' + (data.detail || data.message || 'Erro ao processar na Jump Park.'), 'error');
+        }
+      } catch (err) {
+        setLoading(acao, false);
+        mostrarFeedback('❌ Falha de comunicação com o servidor: ' + err.message, 'error');
+      }
+    }
+
+    function setLoading(acao, ativo) {
+      var btnB   = document.getElementById('btn-bloquear');
+      var btnD   = document.getElementById('btn-desbloquear');
+      var iconB  = document.getElementById('icon-block');
+      var spinB  = document.getElementById('spin-block');
+      var iconD  = document.getElementById('icon-unblock');
+      var spinD  = document.getElementById('spin-unblock');
+
+      btnB.disabled = ativo;
+      btnD.disabled = ativo;
+
+      if (acao === 'bloquear') {
+        iconB.classList.toggle('hidden', ativo);
+        spinB.classList.toggle('hidden', !ativo);
+      } else {
+        iconD.classList.toggle('hidden', ativo);
+        spinD.classList.toggle('hidden', !ativo);
+      }
+    }
+
+    function mostrarFeedback(msg, tipo) {
+      var box = document.getElementById('feedback-box');
+      box.textContent = msg;
+      box.classList.remove('hidden', 'bg-emerald-950/70', 'border-emerald-500/50', 'text-emerald-300',
+                          'bg-red-950/70', 'border-red-500/50', 'text-red-300',
+                          'bg-amber-950/70', 'border-amber-500/50', 'text-amber-300');
+
+      if (tipo === 'ok') {
+        box.classList.add('bg-emerald-950/70', 'border-emerald-500/50', 'text-emerald-300');
+      } else if (tipo === 'warn') {
+        box.classList.add('bg-amber-950/70', 'border-amber-500/50', 'text-amber-300');
+      } else {
+        box.classList.add('bg-red-950/70', 'border-red-500/50', 'text-red-300');
+      }
+
+      box.classList.remove('hidden');
+      box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function ocultarFeedback() {
+      var box = document.getElementById('feedback-box');
+      box.classList.add('hidden');
+      box.textContent = '';
+    }
+
+    /* ──────────────────────────────────────────
+       Histórico & Filtros (Direct Fetch)
+    ────────────────────────────────────────── */
+    async function carregarHistorico(mostrarSkeleton) {
+      if (mostrarSkeleton !== false) {
+        document.getElementById('events-list').innerHTML = 
+          '<div class="space-y-3">' +
+          '  <div class="skeleton-box rounded-2xl h-28 w-full"></div>' +
+          '  <div class="skeleton-box rounded-2xl h-28 w-full"></div>' +
+          '  <div class="skeleton-box rounded-2xl h-28 w-full"></div>' +
+          '</div>';
+      }
+
+      try {
+        var res = await fetch('/api/historico?limite=100');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var dados = await res.json();
+
+        if (Array.isArray(dados)) {
+          todosEventos = dados;
+          popularFiltroAutor(todosEventos);
+          filtrarEventos();
+          document.getElementById('badge-total-eventos').textContent = todosEventos.length + ' registro(s)';
+          atualizarStatusConexao(true);
+        } else {
+          throw new Error('Formato de resposta inválido.');
+        }
+      } catch (err) {
+        document.getElementById('events-list').innerHTML = 
+          '<div class="p-8 text-center bg-app-card rounded-2xl border border-red-900/50 text-red-400 space-y-2">' +
+          '  <div class="text-3xl">⚠️</div>' +
+          '  <div class="font-extrabold text-base">Falha ao sincronizar histórico</div>' +
+          '  <div class="text-xs text-app-textMuted">' + err.message + '</div>' +
+          '  <button onclick="carregarHistorico(true)" class="mt-3 px-4 py-2 bg-app-surface2 hover:bg-app-hover rounded-xl text-xs font-bold text-white border border-app-border">Tentar novamente</button>' +
+          '</div>';
+        document.getElementById('badge-total-eventos').textContent = 'Erro';
+        atualizarStatusConexao(false);
+      }
+    }
+
+    function popularFiltroAutor(eventos) {
+      var sel = document.getElementById('f-autor');
+      var valorAtual = sel.value;
+      var autores = Array.from(new Set(eventos.map(function(e) { return formatarAutor(e.autor); }))).filter(Boolean).sort();
+      
+      sel.innerHTML = '<option value="">Todos Usuários</option>';
+      autores.forEach(function(a) {
+        var opt = document.createElement('option');
+        opt.value = a;
+        opt.textContent = a;
+        sel.appendChild(opt);
+      });
+      if (valorAtual) sel.value = valorAtual;
+    }
+
+    function onSearchInput() {
+      var termo = document.getElementById('search-placa').value.trim();
+      document.getElementById('btn-clear-search').style.display = termo.length > 0 ? 'flex' : 'none';
+
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function() {
+        paginaAtual = 1;
+        filtrarEventos();
+      }, 150);
+    }
+
+    function limparBusca() {
+      document.getElementById('search-placa').value = '';
+      document.getElementById('btn-clear-search').style.display = 'none';
+      paginaAtual = 1;
+      filtrarEventos();
+    }
+
+    function onFiltroChange() {
+      paginaAtual = 1;
+      filtrarEventos();
+    }
+
+    function onPageSizeChange() {
+      tamanhoPagina = parseInt(document.getElementById('page-size').value, 10);
+      paginaAtual = 1;
+      renderizarPagina();
+    }
+
+    function mudarPagina(delta) {
+      var total = eventosFiltrados.length;
+      var totalPaginas = Math.max(1, Math.ceil(total / tamanhoPagina));
+      var novaPagina = paginaAtual + delta;
+      if (novaPagina >= 1 && novaPagina <= totalPaginas) {
+        paginaAtual = novaPagina;
+        renderizarPagina();
+      }
+    }
+
+    function filtrarEventos() {
+      var fEvento = document.getElementById('f-evento').value;
+      var fMetodo = document.getElementById('f-metodo').value;
+      var fAutor  = document.getElementById('f-autor').value;
+      var fPlaca  = document.getElementById('search-placa').value.trim().toUpperCase();
+
+      eventosFiltrados = todosEventos.filter(function(e) {
+        var autorTratado = formatarAutor(e.autor);
+        if (fEvento && e.evento !== fEvento) return false;
+        if (fMetodo && e.metodo !== fMetodo) return false;
+        if (fAutor  && autorTratado !== fAutor) return false;
+        if (fPlaca) {
+          var matchPlaca = e.placa && e.placa.toUpperCase().includes(fPlaca);
+          var matchAutor = autorTratado && autorTratado.toUpperCase().includes(fPlaca);
+          var matchMotivo = e.motivo && e.motivo.toUpperCase().includes(fPlaca);
+          if (!matchPlaca && !matchAutor && !matchMotivo) return false;
+        }
+        return true;
+      });
+
+      renderizarPagina();
+    }
+
+    /* ──────────────────────────────────────────
+       Renderização dos Cards de Histórico
+    ────────────────────────────────────────── */
+    function renderizarPagina() {
+      tamanhoPagina = parseInt(document.getElementById('page-size').value, 10);
+      var total = eventosFiltrados.length;
+      var totalPaginas = Math.max(1, Math.ceil(total / tamanhoPagina));
+
+      if (paginaAtual > totalPaginas) paginaAtual = totalPaginas;
+
+      var inicio = (paginaAtual - 1) * tamanhoPagina;
+      var fim    = Math.min(inicio + tamanhoPagina, total);
+      var slice  = eventosFiltrados.slice(inicio, fim);
+
+      var listEl = document.getElementById('events-list');
+      var pagEl  = document.getElementById('pagination-container');
+
+      if (total === 0) {
+        listEl.innerHTML = 
+          '<div class="p-8 text-center bg-app-card rounded-2xl border border-app-border text-app-textMuted space-y-2">' +
+          '  <div class="text-3xl">🔍</div>' +
+          '  <div class="font-bold text-base text-app-textSub">Nenhum evento localizado</div>' +
+          '  <div class="text-xs">Tente ajustar a busca ou limpar os filtros.</div>' +
+          '</div>';
+        pagEl.classList.add('hidden');
+        return;
+      }
+
+      pagEl.classList.remove('hidden');
+      pagEl.classList.add('flex');
+
+      listEl.innerHTML = slice.map(function(e, i) {
+        var globalIdx = inicio + i;
+        var isBloqueio = (e.evento === 'BLOQUEIO');
+        
+        var badgeEvento = isBloqueio
+          ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-red-950/70 text-red-400 border border-red-500/40">🔒 Bloqueio</span>'
+          : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-emerald-950/70 text-emerald-400 border border-emerald-500/40">🔓 Desbloqueio</span>';
+
+        var badgeMetodo = (e.metodo === 'MANUAL')
+          ? '<span class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-app-surface2 border border-app-border text-app-textMuted">Manual</span>'
+          : '<span class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-purple-950/60 border border-purple-500/30 text-purple-300">Auto</span>';
+
+        var valor = (e.valor_taxa != null && e.valor_taxa !== '')
+          ? 'R$ ' + parseFloat(e.valor_taxa).toFixed(2)
+          : '—';
+
+        var autor = formatarAutor(e.autor);
+        var motivo = e.motivo ? e.motivo.trim() : '';
+
+        return '<div class="group bg-app-card hover:bg-app-hover border border-app-border hover:border-app-accent/40 rounded-2xl p-4 transition-all duration-150 cursor-pointer shadow-sm space-y-3" onclick="abrirModal(' + globalIdx + ')">' +
+          '<div class="flex items-center justify-between gap-2">' +
+          '  <div class="flex items-center gap-2">' +
+          '    <span class="font-mono text-lg font-black text-white tracking-wider bg-[#090e17] px-2.5 py-1 rounded-lg border border-app-border">' + (e.placa || 'SEM PLACA') + '</span>' +
+          '    ' + badgeEvento +
+          '  </div>' +
+          '  <span class="text-xs font-semibold text-app-textMuted">' + (e.timestamp || '—') + '</span>' +
+          '</div>' +
+
+          '<div class="grid grid-cols-3 gap-2 text-xs border-t border-app-border/50 pt-2.5">' +
+          '  <div><span class="text-app-textDim block text-[10px] uppercase font-bold">Método</span>' + badgeMetodo + '</div>' +
+          '  <div><span class="text-app-textDim block text-[10px] uppercase font-bold">Operador</span><span class="font-bold text-app-text truncate block">' + autor + '</span></div>' +
+          '  <div><span class="text-app-textDim block text-[10px] uppercase font-bold">Taxa</span><span class="font-bold text-emerald-400">' + valor + '</span></div>' +
+          '</div>' +
+
+          (motivo ? ('<div class="text-xs text-app-textSub bg-app-surface2/60 rounded-xl p-2 border border-app-border/40 truncate"><span class="font-bold text-app-textDim mr-1">Motivo:</span>' + escapeHtml(motivo) + '</div>') : '') +
+
+          '<div class="flex items-center justify-between text-[11px] text-app-textDim pt-1">' +
+          '  <span>ID #' + (e.id || '—') + '</span>' +
+          '  <span class="text-app-accent group-hover:underline font-bold flex items-center gap-1">👁️ Ver Detalhes</span>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      document.getElementById('pagination-info').textContent = (inicio + 1) + '–' + fim + ' de ' + total;
+      document.getElementById('page-indicator').textContent = paginaAtual + ' / ' + totalPaginas;
+
+      document.getElementById('btn-prev-page').disabled = (paginaAtual <= 1);
+      document.getElementById('btn-next-page').disabled = (paginaAtual >= totalPaginas);
+    }
+
+    /* ──────────────────────────────────────────
+       Modal de Detalhes
+    ────────────────────────────────────────── */
+    var modalRegistroAtual = null;
+
+    function abrirModal(idx) {
+      var e = eventosFiltrados[idx];
+      if (!e) return;
+      modalRegistroAtual = e;
+
+      var isBloqueio = (e.evento === 'BLOQUEIO');
+      var badgeEvento = isBloqueio
+        ? '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-red-950/80 text-red-400 border border-red-500/50">🔒 Bloqueio</span>'
+        : '<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-emerald-950/80 text-emerald-400 border border-emerald-500/50">🔓 Desbloqueio</span>';
+
+      var badgeMetodo = (e.metodo === 'MANUAL')
+        ? '<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-app-surface2 border border-app-border text-app-text">Manual</span>'
+        : '<span class="text-xs font-bold px-2.5 py-1 rounded-md bg-purple-950/70 border border-purple-500/40 text-purple-300">Automático</span>';
+
+      var valor = (e.valor_taxa != null && e.valor_taxa !== '')
+        ? 'R$ ' + parseFloat(e.valor_taxa).toFixed(2)
+        : 'Não informado';
+
+      document.getElementById('m-modal-title').textContent = 'Registro #' + (e.id || '—');
+      document.getElementById('m-placa').textContent     = e.placa || '—';
+      document.getElementById('m-evento').innerHTML      = badgeEvento;
+      document.getElementById('m-timestamp').textContent = e.timestamp || '—';
+      document.getElementById('m-metodo').innerHTML      = badgeMetodo;
+      document.getElementById('m-autor').textContent     = formatarAutor(e.autor);
+      document.getElementById('m-valor').textContent     = valor;
+      document.getElementById('m-estabelecimentos').textContent = e.estabelecimentos_afetados || e.estabelecimento_origem || 'Todos';
+      document.getElementById('m-estabelecimentos').title = e.estabelecimentos_afetados || e.estabelecimento_origem || 'Todos';
+      document.getElementById('m-motivo').textContent    = e.motivo ? e.motivo : '(Nenhum motivo registrado)';
+
+      var overlay = document.getElementById('modal-overlay');
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function fecharModalDireto() {
+      var overlay = document.getElementById('modal-overlay');
+      overlay.classList.remove('flex');
+      overlay.classList.add('hidden');
+      document.body.style.overflow = '';
+      modalRegistroAtual = null;
+    }
+
+    function fecharModal(event) {
+      if (event.target === document.getElementById('modal-overlay')) {
+        fecharModalDireto();
+      }
+    }
+
+    function copiarPlacaModal() {
+      if (modalRegistroAtual && modalRegistroAtual.placa) {
+        navigator.clipboard.writeText(modalRegistroAtual.placa).then(function() {
+          alert('Placa ' + modalRegistroAtual.placa + ' copiada para a área de transferência!');
+        });
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') fecharModalDireto();
+    });
+
+    /* ──────────────────────────────────────────
+       Status de Conexão & Healthcheck
+    ────────────────────────────────────────── */
+    function atualizarStatusConexao(online) {
+      var badge = document.getElementById('connection-badge');
+      var txt   = document.getElementById('connection-text');
+      if (online) {
+        badge.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30';
+        txt.textContent = 'Online';
+      } else {
+        badge.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-red-950/60 text-red-400 border border-red-500/30';
+        txt.textContent = 'Offline';
+      }
+    }
+
+    async function recarregarTudo() {
+      var icon = document.getElementById('refresh-icon');
+      icon.classList.add('animate-spin');
+      await carregarHistorico(true);
+      setTimeout(function() {
+        icon.classList.remove('animate-spin');
+      }, 500);
+    }
+
+    /* ──────────────────────────────────────────
+       Controle da Tela de Carregamento Inicial
+    ────────────────────────────────────────── */
+    function finalizarSplashLoading() {
+      var splash = document.getElementById('loading-screen');
+      if (splash) {
+        splash.classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+        setTimeout(function() {
+          splash.style.display = 'none';
+        }, 550);
+      }
+    }
+
+    /* ──────────────────────────────────────────
+       Inicialização da Aplicação
+    ────────────────────────────────────────── */
+    window.addEventListener('DOMContentLoaded', async function() {
+      recuperarOperadorSalvo();
+
+      // Atualiza o progresso visual da barra de loading
+      var bar = document.getElementById('loading-bar');
+      var statusTxt = document.getElementById('loading-status-text');
+
+      if (bar) bar.style.width = '60%';
+      if (statusTxt) statusTxt.innerHTML = '<span class="w-2 h-2 rounded-full bg-app-accent animate-ping"></span><span>Carregando histórico...</span>';
+
+      try {
+        await carregarHistorico(true);
+        if (bar) bar.style.width = '100%';
+        if (statusTxt) statusTxt.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>Pronto!</span>';
+      } catch (e) {}
+
+      // Fade out da tela de loading suave após 400ms
+      setTimeout(finalizarSplashLoading, 400);
+
+      // Fallback de segurança para garantir que a tela de loading sempre suma
+      setTimeout(finalizarSplashLoading, 2000);
+    });
+  </script>
+</body>
+</html>

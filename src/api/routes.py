@@ -4,9 +4,11 @@ Aplicação FastAPI e definição dos endpoints HTTP.
 """
 
 import logging
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.api.schemas import (
     ActionRequest,
@@ -25,6 +27,10 @@ from src.database.models import Evento
 
 log = logging.getLogger(__name__)
 
+# Diretório de arquivos estáticos do frontend standalone
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI App
 # ──────────────────────────────────────────────────────────────────────────────
@@ -34,7 +40,11 @@ app = FastAPI(
     version="2.0.0",
 )
 
-# CORS aberto — o Google Apps Script faz requisições de domínio arbitrário
+# Monta arquivos estáticos caso existam
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# CORS aberto — permite requisições de qualquer origem
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -42,6 +52,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_frontend():
+    """Serve a interface mobile standalone diretamente na raiz."""
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(str(index_file))
+    return HTMLResponse("<h1>Jump Park Worker API está ativa.</h1><p>Frontend não encontrado em src/static/index.html</p>")
+
 
 
 @app.exception_handler(Exception)
