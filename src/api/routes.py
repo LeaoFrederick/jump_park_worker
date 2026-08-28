@@ -70,10 +70,17 @@ app.add_middleware(
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
-    """Serve a interface mobile standalone diretamente na raiz."""
+    """Serve a interface mobile standalone diretamente na raiz com anti-cache."""
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(str(index_file))
+        return FileResponse(
+            str(index_file),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return HTMLResponse("<h1>Jump Park Worker API está ativa.</h1><p>Frontend não encontrado em src/static/index.html</p>")
 
 
