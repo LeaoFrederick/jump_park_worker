@@ -1,25 +1,21 @@
 {
-  "_comentario": "Configure aqui os e-mails autorizados. O campo 'pin' pode ficar vazio e será cadastrado no primeiro acesso.",
+  "_comentario": "Configure aqui os e-mails dos gestores autorizados. Os PINs criados são salvos automaticamente no servidor de forma segura e não são apagados por commits.",
   "authorized_users": [
     {
       "email": "srross123@gmail.com",
-      "name": "Srross",
-      "pin": ""
+      "name": "Frederick"
     },
     {
       "email": "frederickleao123@gmail.com",
-      "name": "Frederick",
-      "pin": ""
+      "name": "Frederick"
     },
     {
       "email": "franciscoqueirozz@gmail.com",
-      "name": "Francisco",
-      "pin": ""
+      "name": "Francisco"
     },
     {
       "email": "diretoria@iescursos.com.br",
-      "name": "Diretoria",
-      "pin": ""
+      "name": "Diretoria F Alves"
     }
   ]
 }

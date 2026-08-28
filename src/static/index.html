@@ -398,6 +398,38 @@
     </section>
 
     <!-- ──────────────────────────────────────────────────────────────────────── -->
+    <!-- 🛡️ CARD / BOTÃO MODAL: PLACAS BLOQUEADAS POR ESTABELECIMENTO -->
+    <!-- ──────────────────────────────────────────────────────────────────────── -->
+    <section class="bg-gradient-to-r from-jp-surface to-[#151f30] border border-jp-border hover:border-jp-accent/50 rounded-2xl p-3.5 sm:p-4 shadow-card transition-all duration-200">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-xl shrink-0 shadow-sm">
+            🛡️
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider">
+                PLACAS BLOQUEADAS POR UNIDADE
+              </h3>
+              <span id="badge-total-bloqueadas" class="px-2 py-0.5 text-[10px] font-black rounded-full bg-red-950/80 text-red-300 border border-red-500/40 animate-pulse">
+                Consultando...
+              </span>
+            </div>
+            <p class="text-[11px] sm:text-xs text-jp-textMuted">
+              Consulte e pesquise os veículos restritos na API da Jump Park.
+            </p>
+          </div>
+        </div>
+
+        <button type="button" onclick="abrirModalBloqueados()"
+          class="min-h-[42px] px-4 rounded-xl bg-jp-surface2 hover:bg-jp-hover active:scale-95 border border-jp-border hover:border-jp-accent text-xs sm:text-sm font-extrabold text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm">
+          <span>👁️ Ver Placas Bloqueadas</span>
+          <span class="text-jp-accent">➔</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ──────────────────────────────────────────────────────────────────────── -->
     <!-- CARD 2: HISTÓRICO DE OPERAÇÕES (COLAPSÁVEL - PADRÃO FECHADO NO MOBILE) -->
     <!-- ──────────────────────────────────────────────────────────────────────── -->
     <section class="bg-jp-surface border border-jp-border rounded-2xl p-4 sm:p-5 shadow-card space-y-3.5">
@@ -523,7 +555,73 @@
   </main>
 
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
-  <!-- 🔍 MODAL CENTRALIZADO DE DETALHES DO REGISTRO 🔍 -->
+  <!-- 🛡️ MODAL: PLACAS BLOQUEADAS POR ESTABELECIMENTO 🛡️ -->
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="modal-bloqueados-overlay" onclick="fecharModalBloqueadosBackdrop(event)" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4 transition-all duration-200">
+    <div class="bg-jp-surface border border-jp-border rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-2xl space-y-4 animate-slide-down max-h-[90vh] flex flex-col">
+      
+      <!-- Cabeçalho do Modal -->
+      <div class="flex items-start justify-between border-b border-jp-border/80 pb-3 shrink-0">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-base sm:text-lg">🛡️</span>
+            <h3 class="text-base sm:text-lg font-black text-white">Placas Bloqueadas</h3>
+          </div>
+          <p id="modal-bloqueados-subtitle" class="text-[11px] sm:text-xs text-jp-textMuted mt-0.5">
+            Carregando lista de restrições por unidade...
+          </p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button onclick="carregarPlacasBloqueadas(true)" title="Recarregar Lista da API Jump Park" class="w-8 h-8 rounded-full bg-jp-surface2 hover:bg-jp-hover text-jp-textSub hover:text-white flex items-center justify-center text-xs font-bold transition-all">
+            ↺
+          </button>
+          <button onclick="fecharModalBloqueados()" class="w-8 h-8 rounded-full bg-jp-surface2 hover:bg-jp-hover text-jp-textMuted hover:text-white flex items-center justify-center text-sm font-bold transition-all">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Abas de Filtro por Estabelecimento -->
+      <div id="bloqueados-tabs" class="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0 no-scrollbar">
+        <!-- Renderizado dinamicamente via JS -->
+        <button class="px-3 py-1 rounded-xl text-xs font-bold bg-jp-accent text-white">Todas</button>
+      </div>
+
+      <!-- Busca Rápida de Placa Bloqueada -->
+      <div class="relative shrink-0">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-jp-textMuted">
+          🔍
+        </div>
+        <input type="text" id="search-bloqueadas" placeholder="Pesquisar placa bloqueada..." autocomplete="off"
+          class="w-full bg-[#090e17] border border-jp-border rounded-xl pl-8 pr-3 py-2 text-xs sm:text-sm font-semibold text-white placeholder:text-jp-textDim outline-none focus:border-jp-accent uppercase"
+          oninput="filtrarPlacasBloqueadas()" />
+      </div>
+
+      <!-- Lista Rolável de Placas Bloqueadas -->
+      <div id="bloqueados-list" class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[220px]">
+        <!-- Skeleton Loaders -->
+        <div class="space-y-2">
+          <div class="skeleton-box rounded-xl h-16 w-full"></div>
+          <div class="skeleton-box rounded-xl h-16 w-full"></div>
+          <div class="skeleton-box rounded-xl h-16 w-full"></div>
+        </div>
+      </div>
+
+      <!-- Rodapé do Modal -->
+      <div class="border-t border-jp-border/80 pt-3 flex items-center justify-between shrink-0 text-xs">
+        <span id="bloqueados-contador-rodape" class="font-bold text-jp-textMuted text-[11px]">
+          Total: 0 placa(s)
+        </span>
+        <button onclick="fecharModalBloqueados()" class="px-4 py-2 rounded-xl bg-jp-surface2 hover:bg-jp-hover text-white font-bold transition-all">
+          Fechar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+  <!-- 🔍 MODAL CENTRALIZADO DE DETALHES DO REGISTRO DO HISTÓRICO 🔍 -->
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
   <div id="modal-overlay" onclick="fecharModal(event)" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 transition-all duration-200">
     <div id="modal-content" class="bg-jp-surface border border-jp-border rounded-2xl max-w-md w-full p-4 sm:p-5 shadow-2xl space-y-4 animate-slide-down">
@@ -607,6 +705,11 @@
     var authConfig       = { auth_enabled: false, google_client_id: "" };
     var usuarioLogado    = null;
     var emailEmLogin     = "";
+
+    // Estado das Placas Bloqueadas por Unidade
+    var dadosBloqueadosAPI   = null;
+    var tabBloqueadosAtiva   = "ALL";
+    var placasBloqueadasFlat = [];
 
     /* ──────────────────────────────────────────
        Autenticação & Permissões
@@ -700,14 +803,12 @@
           document.getElementById('step-email-form').classList.add('hidden');
 
           if (data.first_access) {
-            // Primeiro Acesso -> Criar PIN
             document.getElementById('login-icon').textContent = '🎉';
             document.getElementById('login-title').textContent = 'Olá, ' + data.name + '!';
             document.getElementById('login-sub').textContent = 'Crie seu PIN de 4 a 6 dígitos para proteger sua conta.';
             document.getElementById('step-first-access-form').classList.remove('hidden');
             setTimeout(function() { document.getElementById('new-pin-input').focus(); }, 100);
           } else {
-            // Acesso Recorrente -> Digitar PIN
             document.getElementById('login-icon').textContent = '🔑';
             document.getElementById('login-title').textContent = 'Olá, ' + data.name + '!';
             document.getElementById('login-sub').textContent = 'Digite seu PIN de 4 a 6 dígitos cadastrado.';
@@ -772,6 +873,7 @@
           document.getElementById('login-overlay').classList.add('hidden');
           mostrarFeedback('✅ PIN cadastrado com sucesso! Bem-vindo(a), ' + usuarioLogado.name + '!', 'ok');
           carregarHistorico(true);
+          carregarPlacasBloqueadas(false);
         } else {
           mostrarErroAuth(data.detail || 'Não foi possível cadastrar o PIN.');
         }
@@ -825,6 +927,7 @@
           document.getElementById('login-overlay').classList.add('hidden');
           mostrarFeedback('✅ Bem-vindo(a) de volta, ' + usuarioLogado.name + '!', 'ok');
           carregarHistorico(true);
+          carregarPlacasBloqueadas(false);
         } else {
           pinInput.value = '';
           pinInput.focus();
@@ -879,6 +982,214 @@
       document.getElementById('user-profile-badge').classList.add('hidden');
       document.getElementById('user-profile-badge').classList.remove('flex');
       exibirTelaLogin();
+    }
+
+    /* ──────────────────────────────────────────
+       Consulta de Placas Bloqueadas por Estabelecimento
+    ────────────────────────────────────────── */
+    function abrirModalBloqueados() {
+      var overlay = document.getElementById('modal-bloqueados-overlay');
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+
+      if (!dadosBloqueadosAPI) {
+        carregarPlacasBloqueadas(true);
+      } else {
+        renderizarAbasBloqueados();
+        filtrarPlacasBloqueadas();
+      }
+    }
+
+    function fecharModalBloqueados() {
+      var overlay = document.getElementById('modal-bloqueados-overlay');
+      overlay.classList.remove('flex');
+      overlay.classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    function fecharModalBloqueadosBackdrop(event) {
+      if (event.target === document.getElementById('modal-bloqueados-overlay')) {
+        fecharModalBloqueados();
+      }
+    }
+
+    async function carregarPlacasBloqueadas(mostrarSkeleton) {
+      var listEl = document.getElementById('bloqueados-list');
+      var badge = document.getElementById('badge-total-bloqueadas');
+      var subtitle = document.getElementById('modal-bloqueados-subtitle');
+
+      if (mostrarSkeleton !== false && listEl) {
+        listEl.innerHTML = 
+          '<div class="space-y-2">' +
+          '  <div class="skeleton-box rounded-xl h-16 w-full"></div>' +
+          '  <div class="skeleton-box rounded-xl h-16 w-full"></div>' +
+          '  <div class="skeleton-box rounded-xl h-16 w-full"></div>' +
+          '</div>';
+      }
+
+      try {
+        var res = await fetch('/api/bloqueados', { headers: getAuthHeaders() });
+        if (res.status === 401 && authConfig.auth_enabled) {
+          fazerLogout();
+          return;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var data = await res.json();
+
+        dadosBloqueadosAPI = data;
+
+        // Monta lista plana agregada por placa única
+        var mapaPlacas = {};
+        (data.estabelecimentos || []).forEach(function(est) {
+          (est.veiculos || []).forEach(function(v) {
+            var p = (v.plate || '').toUpperCase().trim();
+            if (!p) return;
+            if (!mapaPlacas[p]) {
+              mapaPlacas[p] = {
+                plate: p,
+                model: v.model || '',
+                color: v.color || '',
+                created_at: v.created_at || '',
+                estabelecimentos: []
+              };
+            }
+            if (!mapaPlacas[p].estabelecimentos.includes(est.estabelecimento)) {
+              mapaPlacas[p].estabelecimentos.push(est.estabelecimento);
+            }
+          });
+        });
+
+        placasBloqueadasFlat = Object.values(mapaPlacas).sort(function(a, b) {
+          return a.plate.localeCompare(b.plate);
+        });
+
+        if (badge) {
+          badge.textContent = data.total_placas_unicas + ' Bloqueada(s)';
+          badge.classList.remove('animate-pulse');
+        }
+
+        if (subtitle) {
+          subtitle.textContent = data.total_placas_unicas + ' placa(s) única(s) em ' + (data.estabelecimentos || []).length + ' unidade(s)';
+        }
+
+        renderizarAbasBloqueados();
+        filtrarPlacasBloqueadas();
+      } catch (err) {
+        if (badge) badge.textContent = 'Indisponível';
+        if (listEl) {
+          listEl.innerHTML = 
+            '<div class="p-5 text-center bg-jp-card rounded-xl border border-red-900/50 text-red-400 space-y-1">' +
+            '  <div class="text-2xl">⚠️</div>' +
+            '  <div class="font-bold text-xs">Erro ao consultar lista da Jump Park</div>' +
+            '  <div class="text-[10px] text-jp-textMuted">' + err.message + '</div>' +
+            '</div>';
+        }
+      }
+    }
+
+    function renderizarAbasBloqueados() {
+      var tabsContainer = document.getElementById('bloqueados-tabs');
+      if (!tabsContainer || !dadosBloqueadosAPI) return;
+
+      var totalGeral = dadosBloqueadosAPI.total_placas_unicas || 0;
+      var html = '<button onclick="selecionarTabBloqueados(\'ALL\')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ' + 
+        (tabBloqueadosAtiva === 'ALL' ? 'bg-jp-accent text-white shadow-glow-blue' : 'bg-jp-surface2 text-jp-textMuted hover:text-white') + '">' +
+        'Todas as Unidades (' + totalGeral + ')' +
+        '</button>';
+
+      (dadosBloqueadosAPI.estabelecimentos || []).forEach(function(est) {
+        var isAtiva = (tabBloqueadosAtiva === est.estabelecimento);
+        html += '<button onclick="selecionarTabBloqueados(\'' + est.estabelecimento + '\')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ' +
+          (isAtiva ? 'bg-jp-accent text-white shadow-glow-blue' : 'bg-jp-surface2 text-jp-textMuted hover:text-white') + '">' +
+          est.estabelecimento + ' (' + est.total + ')' +
+          '</button>';
+      });
+
+      tabsContainer.innerHTML = html;
+    }
+
+    function selecionarTabBloqueados(tab) {
+      tabBloqueadosAtiva = tab;
+      renderizarAbasBloqueados();
+      filtrarPlacasBloqueadas();
+    }
+
+    function filtrarPlacasBloqueadas() {
+      var searchInput = document.getElementById('search-bloqueadas');
+      var termo = searchInput ? searchInput.value.trim().toUpperCase() : '';
+      var listEl = document.getElementById('bloqueados-list');
+      var contadorRodape = document.getElementById('bloqueados-contador-rodape');
+
+      var filtradas = placasBloqueadasFlat.filter(function(item) {
+        if (tabBloqueadosAtiva !== 'ALL' && !item.estabelecimentos.includes(tabBloqueadosAtiva)) {
+          return false;
+        }
+        if (termo && !item.plate.includes(termo)) {
+          return false;
+        }
+        return true;
+      });
+
+      if (contadorRodape) {
+        contadorRodape.textContent = 'Exibindo ' + filtradas.length + ' placa(s)';
+      }
+
+      if (filtradas.length === 0) {
+        listEl.innerHTML = 
+          '<div class="p-6 text-center bg-jp-card rounded-xl border border-jp-border text-jp-textMuted space-y-1">' +
+          '  <div class="text-2xl">🎉</div>' +
+          '  <div class="font-bold text-xs text-jp-textSub">Nenhuma placa bloqueada encontrada</div>' +
+          '  <div class="text-[10px]">Tente selecionar outra unidade ou limpar a busca.</div>' +
+          '</div>';
+        return;
+      }
+
+      listEl.innerHTML = filtradas.map(function(item) {
+        var badgesEst = item.estabelecimentos.map(function(est) {
+          return '<span class="px-2 py-0.5 rounded-md bg-jp-surface2 border border-jp-border text-[10px] font-bold text-jp-textSub">' + est + '</span>';
+        }).join(' ');
+
+        return '<div class="bg-jp-card border border-jp-border hover:border-jp-accent/50 rounded-xl p-3 flex items-center justify-between gap-2 transition-all">' +
+          '<div class="space-y-1">' +
+          '  <div class="flex items-center gap-2">' +
+          '    <span class="font-mono text-base font-black text-white tracking-wider bg-[#090e17] px-2.5 py-0.5 rounded border border-jp-border">' + item.plate + '</span>' +
+          '    <span class="text-[10px] font-black text-red-400 bg-red-950/70 border border-red-500/30 px-2 py-0.5 rounded-full">🔒 Bloqueado</span>' +
+          '  </div>' +
+          '  <div class="flex flex-wrap gap-1 items-center">' +
+          '    <span class="text-[9px] font-bold uppercase text-jp-textDim mr-0.5">Unidades:</span>' +
+          '    ' + badgesEst +
+          '  </div>' +
+          '</div>' +
+
+          '<div class="flex items-center gap-1.5 shrink-0">' +
+          '  <button onclick="copiarTexto(\'' + item.plate + '\')" title="Copiar Placa" class="px-2.5 py-1.5 rounded-lg bg-jp-surface2 hover:bg-jp-hover border border-jp-border text-xs font-bold text-jp-textSub transition-all">' +
+          '    Copiar' +
+          '  </button>' +
+          '  <button onclick="selecionarPlacaParaAcao(\'' + item.plate + '\')" title="Preencher para Desbloquear" class="px-2.5 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-xs font-black text-emerald-300 transition-all">' +
+          '    Desbloquear ➔' +
+          '  </button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function copiarTexto(txt) {
+      navigator.clipboard.writeText(txt).then(function() {
+        mostrarFeedback('📋 Placa ' + txt + ' copiada para a área de transferência!', 'ok');
+      });
+    }
+
+    function selecionarPlacaParaAcao(placa) {
+      fecharModalBloqueados();
+      var input = document.getElementById('placa');
+      if (input) {
+        input.value = placa;
+        formatarPlacaInput(input);
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input.focus();
+        mostrarFeedback('👉 Placa ' + placa + ' pronta para desbloquear. Clique no botão Desbloquear.', 'warn');
+      }
     }
 
     /* ──────────────────────────────────────────
@@ -1031,6 +1342,7 @@
             placaInput.value = '';
             motivoInput.value = '';
             carregarHistorico(false);
+            carregarPlacasBloqueadas(false);
           }
         } else {
           mostrarFeedback('❌ ' + (data.detail || data.message || 'Erro ao processar na Jump Park.'), 'error');
@@ -1362,13 +1674,19 @@
     }
 
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') fecharModalDireto();
+      if (e.key === 'Escape') {
+        fecharModalDireto();
+        fecharModalBloqueados();
+      }
     });
 
     async function recarregarTudo() {
       var icon = document.getElementById('refresh-icon');
       icon.classList.add('animate-spin');
-      await carregarHistorico(true);
+      await Promise.all([
+        carregarHistorico(true),
+        carregarPlacasBloqueadas(false)
+      ]);
       setTimeout(function() {
         icon.classList.remove('animate-spin');
       }, 500);
@@ -1394,16 +1712,19 @@
       var bar = document.getElementById('loading-bar');
       var statusTxt = document.getElementById('loading-status-text');
 
-      if (bar) bar.style.width = '60%';
+      if (bar) bar.style.width = '50%';
       if (statusTxt) statusTxt.innerHTML = '<span class="w-2 h-2 rounded-full bg-jp-accent animate-ping"></span><span>Validando sessão de segurança...</span>';
 
       var logadoOuPermitido = await checarConfiguracaoAuth();
 
       if (logadoOuPermitido) {
-        if (bar) bar.style.width = '90%';
-        if (statusTxt) statusTxt.innerHTML = '<span class="w-2 h-2 rounded-full bg-jp-accent animate-ping"></span><span>Sincronizando registros...</span>';
+        if (bar) bar.style.width = '80%';
+        if (statusTxt) statusTxt.innerHTML = '<span class="w-2 h-2 rounded-full bg-jp-accent animate-ping"></span><span>Sincronizando registros e bloqueios...</span>';
         try {
-          await carregarHistorico(false);
+          await Promise.all([
+            carregarHistorico(false),
+            carregarPlacasBloqueadas(false)
+          ]);
           if (bar) bar.style.width = '100%';
           if (statusTxt) statusTxt.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>Pronto!</span>';
         } catch (e) {}

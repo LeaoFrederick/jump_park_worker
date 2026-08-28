@@ -32,6 +32,7 @@ from src.api.schemas import (
 from src.config import get_ready_establishments
 from src.core.jumppark_client import (
     block_vehicle_on_establishment,
+    get_blocked_vehicles_details,
     unblock_vehicle_on_establishment,
 )
 from src.database import registrar_evento
@@ -259,6 +260,44 @@ def auth_google(payload: GoogleAuthPayload):
 def auth_me(user: dict = Depends(get_current_user)):
     """Retorna os dados do operador atualmente autenticado."""
     return user
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Rotas — Consulta de Placas Bloqueadas por Estabelecimento
+# ──────────────────────────────────────────────────────────────────────────────
+@app.get("/api/bloqueados")
+def listar_placas_bloqueadas(user: dict = Depends(get_current_user)):
+    """
+    Retorna a lista de veículos e placas bloqueadas atualmente em cada estabelecimento Jump Park.
+    """
+    ready = _get_ready_configs()
+    resultado = []
+    total_placas_geral = 0
+    placas_unicas = set()
+
+    for config in ready:
+        veiculos = get_blocked_vehicles_details(config)
+        total_unidade = len(veiculos)
+        total_placas_geral += total_unidade
+        for v in veiculos:
+            if v.get("plate"):
+                placas_unicas.add(v["plate"])
+
+        resultado.append({
+            "estabelecimento": config.label,
+            "prefix": config.prefix,
+            "establishment_id": config.establishment_id,
+            "total": total_unidade,
+            "veiculos": veiculos,
+        })
+
+    return {
+        "status": "ok",
+        "total_estabelecimentos": len(resultado),
+        "total_bloqueios": total_placas_geral,
+        "total_placas_unicas": len(placas_unicas),
+        "estabelecimentos": resultado,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────

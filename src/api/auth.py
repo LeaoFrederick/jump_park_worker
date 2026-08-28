@@ -1,6 +1,7 @@
 """
 src/api/auth.py
 Módulo de autenticação por e-mail, PIN no primeiro acesso e controle de permissões em JSON.
+Separa a lista de usuários autorizados (no Git) das credenciais de PIN (armazenadas localmente).
 """
 
 import base64
@@ -19,10 +20,13 @@ from fastapi import HTTPException, Header
 
 log = logging.getLogger(__name__)
 
-# Diretório raiz e caminho do arquivo de usuários autorizados
+# Diretório raiz e caminhos dos arquivos
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_FILE = BASE_DIR / "config" / "authorized_users.json"
 FALLBACK_CONFIG_FILE = BASE_DIR / "authorized_users.json"
+
+# Arquivo de credenciais locais (PINs criptografados) — NUNCA versionado no Git
+CREDENTIALS_FILE = BASE_DIR / "config" / "user_credentials.json"
 
 # Chave secreta para assinatura dos tokens de sessão (HMAC-SHA256)
 AUTH_SECRET = os.getenv("AUTH_SECRET") or os.getenv("SECRET_KEY") or "jump_park_secret_key_prod_2026"
@@ -60,68 +64,78 @@ def hash_pin(pin: str) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def load_auth_config() -> dict:
-    """Carrega as configurações e normaliza a lista de usuários autorizados."""
-    config_path = _get_config_path()
-    if not config_path.exists():
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        default_data = {
-            "authorized_users": []
-        }
-        try:
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(default_data, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            log.warning(f"[AUTH] Falha ao criar arquivo de config padrão: {e}")
-        return default_data
-
+def load_credentials() -> dict:
+    """Lê o arquivo local de credenciais e PINs dos usuários."""
+    if not CREDENTIALS_FILE.exists():
+        return {}
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-
-        # Normaliza formato legado "authorized_emails: [str]" para "authorized_users: [dict]"
-        users = []
-        if "authorized_users" in data and isinstance(data["authorized_users"], list):
-            for u in data["authorized_users"]:
-                if isinstance(u, dict) and u.get("email"):
-                    email = str(u["email"]).strip().lower()
-                    name = u.get("name") or format_display_name_from_email(email)
-                    pin = str(u.get("pin", "")).strip()
-                    users.append({"email": email, "name": name, "pin": pin})
-                elif isinstance(u, str) and u.strip():
-                    email = u.strip().lower()
-                    users.append({"email": email, "name": format_display_name_from_email(email), "pin": ""})
-        elif "authorized_emails" in data and isinstance(data["authorized_emails"], list):
-            for e in data["authorized_emails"]:
-                if isinstance(e, str) and e.strip():
-                    email = e.strip().lower()
-                    users.append({"email": email, "name": format_display_name_from_email(email), "pin": ""})
-
-        data["authorized_users"] = users
-        return data
+            if isinstance(data, dict):
+                return {str(k).strip().lower(): str(v).strip() for k, v in data.items()}
     except Exception as e:
-        log.error(f"[AUTH] Erro ao ler {config_path}: {e}")
-        return {"authorized_users": []}
+        log.error(f"[AUTH] Erro ao ler credenciais de {CREDENTIALS_FILE}: {e}")
+    return {}
 
 
-def save_auth_config(data: dict) -> bool:
-    """Salva atomicamente as configurações de usuários no arquivo JSON."""
-    config_path = _get_config_path()
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = config_path.with_suffix(".tmp")
+def save_credentials(creds: dict) -> bool:
+    """Salva atomicamente as credenciais dos usuários no arquivo local."""
+    CREDENTIALS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp_file = CREDENTIALS_FILE.with_suffix(".tmp")
     try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        tmp_path.replace(config_path)
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(creds, f, indent=2, ensure_ascii=False)
+        tmp_file.replace(CREDENTIALS_FILE)
         return True
     except Exception as e:
-        log.error(f"[AUTH] Falha ao salvar {config_path}: {e}")
-        if tmp_path.exists():
+        log.error(f"[AUTH] Falha ao salvar credenciais em {CREDENTIALS_FILE}: {e}")
+        if tmp_file.exists():
             try:
-                tmp_path.unlink()
+                tmp_file.unlink()
             except Exception:
                 pass
         return False
+
+
+def load_auth_config() -> dict:
+    """
+    Carrega as configurações públicas de usuários e mescla dinamicamente com os PINs locais salvos.
+    Isso garante que um git pull na lista de usuários nunca apague os PINs cadastrados na VM.
+    """
+    config_path = _get_config_path()
+    raw_users = []
+
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if "authorized_users" in data and isinstance(data["authorized_users"], list):
+                raw_users = data["authorized_users"]
+            elif "authorized_emails" in data and isinstance(data["authorized_emails"], list):
+                raw_users = data["authorized_emails"]
+        except Exception as e:
+            log.error(f"[AUTH] Erro ao ler {config_path}: {e}")
+            raw_users = []
+
+    # Carrega PINs salvos localmente
+    saved_creds = load_credentials()
+
+    # Normaliza lista de usuários autorizados
+    merged_users = []
+    for item in raw_users:
+        if isinstance(item, dict) and item.get("email"):
+            email = str(item["email"]).strip().lower()
+            name = item.get("name") or format_display_name_from_email(email)
+            # Prioriza o PIN salvo em user_credentials.json
+            pin = saved_creds.get(email) or str(item.get("pin", "")).strip()
+            merged_users.append({"email": email, "name": name, "pin": pin})
+        elif isinstance(item, str) and item.strip():
+            email = item.strip().lower()
+            name = format_display_name_from_email(email)
+            pin = saved_creds.get(email, "")
+            merged_users.append({"email": email, "name": name, "pin": pin})
+
+    return {"authorized_users": merged_users}
 
 
 def get_user_by_email(email: str) -> Optional[dict]:
@@ -159,34 +173,32 @@ def check_user_auth_status(email: str) -> dict:
 
 
 def set_user_pin(email: str, pin: str) -> Optional[dict]:
-    """Cadastra ou atualiza o PIN de um e-mail autorizado no JSON."""
+    """
+    Cadastra o PIN do usuário salvando diretamente em user_credentials.json.
+    Dessa forma, o PIN persiste mesmo após commits e pulls do Git.
+    """
     email_clean = email.strip().lower()
     pin_clean = str(pin).strip()
     if not pin_clean or len(pin_clean) < 4:
         raise ValueError("O PIN deve ter no mínimo 4 dígitos.")
 
-    cfg = load_auth_config()
-    user_found = None
-    for u in cfg.get("authorized_users", []):
-        if u.get("email") == email_clean:
-            # Salva o PIN (usando hash para segurança)
-            u["pin"] = hash_pin(pin_clean)
-            if not u.get("name"):
-                u["name"] = format_display_name_from_email(email_clean)
-            user_found = u
-            break
-
-    if not user_found:
+    if not is_email_authorized(email_clean):
         return None
 
-    if save_auth_config(cfg):
-        log.info("[AUTH] PIN cadastrado com sucesso para o operador %s (%s).", user_found["name"], email_clean)
-        return user_found
+    # Salva no arquivo de credenciais local
+    creds = load_credentials()
+    hashed = hash_pin(pin_clean)
+    creds[email_clean] = hashed
+
+    if save_credentials(creds):
+        user = get_user_by_email(email_clean)
+        log.info("[AUTH] PIN cadastrado com sucesso para o operador %s (%s).", user.get("name"), email_clean)
+        return user
     return None
 
 
 def verify_user_pin(email: str, pin: str) -> Optional[dict]:
-    """Verifica se o PIN informado confere com o PIN cadastrado no JSON."""
+    """Verifica se o PIN informado confere com o PIN cadastrado localmente."""
     user = get_user_by_email(email)
     if not user:
         return None
@@ -197,7 +209,6 @@ def verify_user_pin(email: str, pin: str) -> Optional[dict]:
         return None
 
     input_pin = str(pin).strip()
-    # Suporta tanto hash SHA256 quanto texto puro (caso editado manualmente no JSON)
     hashed_input = hash_pin(input_pin)
 
     if hmac.compare_digest(stored_pin, hashed_input) or hmac.compare_digest(stored_pin, input_pin):
@@ -209,9 +220,7 @@ def verify_user_pin(email: str, pin: str) -> Optional[dict]:
 
 def get_google_client_id() -> str:
     """Retorna o Google Client ID configurado no JSON ou no .env se presente."""
-    cfg = load_auth_config()
-    client_id = cfg.get("google_client_id") or os.getenv("GOOGLE_CLIENT_ID", "")
-    return client_id.strip()
+    return os.getenv("GOOGLE_CLIENT_ID", "").strip()
 
 
 def verify_google_token(credential: str) -> Optional[dict]:

@@ -182,4 +182,8 @@ cython_debug/
 # Arquivo local com dados da VM Oracle
 oracle-vm.md
 
-
+# Credenciais e PINs locais gerados em tempo de execução
+config/user_credentials.json
+config/*.tmp
+authorized_users.json
+user_credentials.json

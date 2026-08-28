@@ -14,6 +14,12 @@ log = logging.getLogger(__name__)
 
 def get_blocked_plates(config: EstablishmentConfig) -> list[str]:
     """Busca as placas vinculadas ao cliente 'CARRO BLOQUEADO' de um estabelecimento."""
+    vehicles = get_blocked_vehicles_details(config)
+    return [v["plate"] for v in vehicles if v.get("plate")]
+
+
+def get_blocked_vehicles_details(config: EstablishmentConfig) -> list[dict]:
+    """Busca os dados detalhados das placas vinculadas ao cliente 'CARRO BLOQUEADO' de um estabelecimento."""
     url = (
         f"{BASE_URL}/api/{config.integration_id}"
         f"/public/establishment/{config.establishment_id}"
@@ -23,14 +29,22 @@ def get_blocked_plates(config: EstablishmentConfig) -> list[str]:
         response = requests.get(url, headers=build_headers(config), timeout=10)
         if response.status_code == 200:
             data = response.json().get("data", [])
-            plates = [v.get("plate") for v in data if v.get("plate")]
-            return plates
+            vehicles = []
+            for v in data:
+                if isinstance(v, dict) and v.get("plate"):
+                    vehicles.append({
+                        "plate": v.get("plate", "").strip().upper(),
+                        "model": v.get("model", "") or "",
+                        "color": v.get("color", "") or "",
+                        "created_at": v.get("createdAt", "") or v.get("created_at", "") or "",
+                    })
+                elif isinstance(v, str) and v.strip():
+                    vehicles.append({"plate": v.strip().upper(), "model": "", "color": "", "created_at": ""})
+            return vehicles
         if response.status_code == 401:
             log.error(
                 "[CACHE][%s] Erro ao buscar veículos: HTTP 401 (Não autorizado). "
-                "Verifique se ACCESS_TOKEN e INTEGRATION_ID estão corretos e se "
-                "ORIGIN está definido com o domínio cadastrado no Site Admin.\n"
-                "  URL usada: %s", config.label, url,
+                "Verifique credenciais. URL: %s", config.label, url,
             )
         else:
             log.error("[CACHE][%s] Erro ao buscar veículos: HTTP %s", config.label, response.status_code)
