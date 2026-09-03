@@ -321,27 +321,7 @@
   </header>
 
   <!-- Banner de Impersonation (visível apenas durante sessão impersonada) -->
-  <div id="impersonation-banner" class="hidden bg-amber-950/60 border border-amber-500/40 rounded-2xl px-4 py-3 text-sm shadow-card animate-slide-down"></div>
-
-  <!-- Painel de Impersonation (visível apenas para ADMIN sem estar impersonando) -->
-  <div id="impersonate-panel" class="hidden bg-jp-surface border border-jp-border rounded-2xl p-4 shadow-card space-y-3">
-    <div class="flex items-center gap-2.5">
-      <span class="w-2.5 h-2.5 rounded-full bg-jp-purple shadow-[0_0_10px_#bf5af2]"></span>
-      <h2 class="text-xs sm:text-sm font-extrabold tracking-wider text-white uppercase">Agir como Operador</h2>
-    </div>
-    <p class="text-[11px] text-jp-textMuted">Inicie uma sessão temporária (2h) em nome de um operador sem precisar da senha dele.</p>
-    <div class="flex flex-col gap-2" id="impersonate-operators-list">
-      <!-- Populado dinamicamente pelo JS -->
-      <button type="button" onclick="iniciarImpersonation('caio@falves.com')"
-        class="w-full min-h-[40px] rounded-xl bg-jp-surface2 hover:bg-jp-hover border border-jp-border text-xs font-bold text-jp-textSub hover:text-white flex items-center gap-2 px-3 transition-all active:scale-95">
-        <span class="text-jp-purple">👤</span> Agir como Caio (caio@falves.com)
-      </button>
-      <button type="button" onclick="iniciarImpersonation('iago@falves.com')"
-        class="w-full min-h-[40px] rounded-xl bg-jp-surface2 hover:bg-jp-hover border border-jp-border text-xs font-bold text-jp-textSub hover:text-white flex items-center gap-2 px-3 transition-all active:scale-95">
-        <span class="text-jp-purple">👤</span> Agir como Iago (iago@falves.com)
-      </button>
-    </div>
-  </div>
+  <div id="impersonation-banner" class="hidden max-w-4xl mx-auto mt-2 px-3 sm:px-4 bg-amber-950/60 border border-amber-500/40 rounded-2xl py-3 text-sm shadow-card animate-slide-down"></div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
   <!-- 🖥️ CONTEÚDO PRINCIPAL (DASHBOARD) 🖥️ -->
@@ -394,8 +374,8 @@
             class="w-full bg-[#0d131f] border border-jp-border rounded-xl p-3 text-xs sm:text-sm font-medium text-white placeholder:text-jp-textDim outline-none focus:border-jp-accent focus:ring-1 focus:ring-jp-accent/30 transition-all resize-none"></textarea>
         </div>
 
-        <!-- BOTÕES DE AÇÃO: GRID 2 COLUNAS FIXO NO MOBILE -->
-        <div class="grid grid-cols-2 gap-2.5 pt-1">
+        <!-- BOTÕES DE AÇÃO: GRID -->
+        <div id="action-buttons-grid" class="grid grid-cols-2 gap-2.5 pt-1 transition-all">
           <!-- Botão Bloquear -->
           <button type="button" id="btn-bloquear" onclick="executarAcao('bloquear')"
             class="group min-h-[48px] sm:min-h-[54px] rounded-xl bg-gradient-to-r from-[#e53e3e] to-[#b91c1c] hover:from-[#f85149] hover:to-[#c53030] active:scale-95 shadow-glow-red text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
@@ -587,6 +567,35 @@
 
       </div>
     </section>
+
+    <!-- ──────────────────────────────────────────────────────────────────────── -->
+    <!-- CONFIGURAÇÕES AVANÇADAS (IMPERSONATION) -->
+    <!-- ──────────────────────────────────────────────────────────────────────── -->
+    <section id="advanced-config-wrapper" class="hidden flex-col items-center pt-2 pb-4">
+      <button onclick="toggleImpersonatePanel()" class="text-[10px] sm:text-[11px] text-jp-textDim hover:text-jp-textMuted font-semibold flex items-center gap-1.5 transition-colors active:scale-95">
+        <span>⚙️ Configurações Avançadas</span>
+        <span id="advanced-chevron">▼</span>
+      </button>
+
+      <div id="impersonate-panel" class="hidden w-full bg-jp-surface border border-jp-border rounded-2xl p-4 shadow-card space-y-3 mt-3 animate-slide-down">
+        <div class="flex items-center gap-2.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-jp-purple shadow-[0_0_10px_#bf5af2]"></span>
+          <h2 class="text-xs sm:text-sm font-extrabold tracking-wider text-white uppercase">Agir como Operador</h2>
+        </div>
+        <p class="text-[11px] text-jp-textMuted">Inicie uma sessão temporária (2h) em nome de um operador sem precisar da senha dele.</p>
+        <div class="flex flex-col gap-2" id="impersonate-operators-list">
+          <button type="button" onclick="iniciarImpersonation('caio@falves.com')"
+            class="w-full min-h-[40px] rounded-xl bg-jp-surface2 hover:bg-jp-hover border border-jp-border text-xs font-bold text-jp-textSub hover:text-white flex items-center gap-2 px-3 transition-all active:scale-95">
+            <span class="text-jp-purple">👤</span> Agir como Caio (caio@falves.com)
+          </button>
+          <button type="button" onclick="iniciarImpersonation('iago@falves.com')"
+            class="w-full min-h-[40px] rounded-xl bg-jp-surface2 hover:bg-jp-hover border border-jp-border text-xs font-bold text-jp-textSub hover:text-white flex items-center gap-2 px-3 transition-all active:scale-95">
+            <span class="text-jp-purple">👤</span> Agir como Iago (iago@falves.com)
+          </button>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <!-- ══════════════════════════════════════════════════════════════════════════ -->
@@ -1043,14 +1052,25 @@
     function aplicarControlesRole(user) {
       var role = (user && user.role) ? user.role.toUpperCase() : 'OPERATOR';
       var isAdmin = (role === 'ADMIN');
+      var userEmail = (user && user.email) ? user.email.toLowerCase() : '';
+      var isSuperAdmin = (userEmail === 'srross123@gmail.com' || userEmail === 'frederickleao123@gmail.com');
 
       // Botão Desbloquear: visível apenas para ADMIN
       var btnWrapper = document.getElementById('btn-desbloquear-wrapper');
+      var actionButtonsGrid = document.getElementById('action-buttons-grid');
       if (btnWrapper) {
         if (isAdmin) {
           btnWrapper.classList.remove('hidden');
+          if (actionButtonsGrid) {
+            actionButtonsGrid.classList.add('grid-cols-2');
+            actionButtonsGrid.classList.remove('grid-cols-1');
+          }
         } else {
           btnWrapper.classList.add('hidden');
+          if (actionButtonsGrid) {
+            actionButtonsGrid.classList.remove('grid-cols-2');
+            actionButtonsGrid.classList.add('grid-cols-1');
+          }
         }
       }
 
@@ -1059,14 +1079,28 @@
       // (controlado via variável global usada no renderizarPlacasBloqueadas)
       window._jpUserIsAdmin = isAdmin;
 
-      // Oculta/mostra painel de impersonation (só para ADMIN sem estar impersonando)
-      var impersonatePanel = document.getElementById('impersonate-panel');
-      if (impersonatePanel) {
-        if (isAdmin && !user.impersonated_by) {
-          impersonatePanel.classList.remove('hidden');
+      // Oculta/mostra wrapper de config avançada (só para SUPER ADMIN sem estar impersonando)
+      var advWrapper = document.getElementById('advanced-config-wrapper');
+      if (advWrapper) {
+        if (isSuperAdmin && !user.impersonated_by) {
+          advWrapper.classList.remove('hidden');
+          advWrapper.classList.add('flex');
         } else {
-          impersonatePanel.classList.add('hidden');
+          advWrapper.classList.add('hidden');
+          advWrapper.classList.remove('flex');
         }
+      }
+    }
+
+    function toggleImpersonatePanel() {
+      var panel = document.getElementById('impersonate-panel');
+      var chevron = document.getElementById('advanced-chevron');
+      if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        chevron.textContent = '▲';
+      } else {
+        panel.classList.add('hidden');
+        chevron.textContent = '▼';
       }
     }
 
