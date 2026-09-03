@@ -1,29 +1,35 @@
 {
-  "_comentario": "Configure aqui os e-mails dos gestores autorizados. Os PINs criados são salvos automaticamente no servidor de forma segura e não são apagados por commits.",
+  "_comentario": "Configure aqui os e-mails dos gestores autorizados. Role: ADMIN = acesso total (bloquear + desbloquear). Role: OPERATOR = apenas bloquear. Os PINs criados são salvos automaticamente no servidor de forma segura e não são apagados por commits.",
   "authorized_users": [
     {
       "email": "srross123@gmail.com",
-      "name": "Frederick"
+      "name": "Frederick",
+      "role": "ADMIN"
     },
     {
       "email": "frederickleao123@gmail.com",
-      "name": "Frederick"
+      "name": "Frederick",
+      "role": "ADMIN"
     },
     {
       "email": "franciscoqueirozz@gmail.com",
-      "name": "Francisco"
+      "name": "Francisco",
+      "role": "ADMIN"
     },
     {
       "email": "diretoria@falves.com.br",
-      "name": "Diretoria F Alves"
+      "name": "Diretoria F Alves",
+      "role": "ADMIN"
     },
     {
       "email": "caio@falves.com",
-      "name": "Caio"
+      "name": "Caio",
+      "role": "OPERATOR"
     },
     {
       "email": "iago@falves.com",
-      "name": "Iago"
+      "name": "Iago",
+      "role": "OPERATOR"
     }
   ]
 }

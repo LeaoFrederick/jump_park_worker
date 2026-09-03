@@ -18,9 +18,18 @@ Este guia ensina como rodar a interface web diretamente na sua **VM da Oracle** 
 
 ## 🛠️ Como Funciona a Arquitetura
 
-1. O **FastAPI** já está configurado para servir a interface visual no arquivo [`src/static/index.html`](file:///e:/drive/Clientes/FRANCISCO%202025/RESTRIÇÕES%20CENTRO/jump_park_worker/src/static/index.html) quando qualquer usuário acessa a raiz `/`.
-2. O **Nginx** roda na porta padrão `80` (HTTP) e `443` (HTTPS) e faz o repasse transparente para o FastAPI na porta `8000`.
-3. O usuário acessa um link limpo como `https://painel-jump.duckdns.org` ou `https://painel.suaempresa.com.br` no navegador do celular.
+1. O **FastAPI** está configurado para ouvir **apenas em `127.0.0.1:8000`** (localhost). Ele **não aceita** conexões diretas da internet.
+2. O **Nginx** roda nas portas `80` (HTTP) e `443` (HTTPS) e faz o repasse transparente para o FastAPI via proxy reverso.
+3. O usuário acessa um link limpo como `https://painel-jumppark.duckdns.org` no navegador do celular.
+4. **Rate Limiting** no Nginx protege contra ataques de força bruta e sobrecarregamento da VM micro.
+
+```
+Internet ──► Nginx (443/HTTPS) ──► FastAPI (127.0.0.1:8000) ──► Jump Park API
+                 │
+                 └── Rate Limit (5 req/s por IP)
+                 └── Security Headers
+                 └── SSL/TLS (Let's Encrypt)
+```
 
 ---
 
@@ -35,11 +44,15 @@ Este guia ensina como rodar a interface web diretamente na sua **VM da Oracle** 
 
 ---
 
-### 2. Liberar as portas 80 e 443 na Oracle Cloud & Linux
-Na VM Oracle (Ubuntu/Debian), execute no terminal:
+### 2. Liberar APENAS as portas 80 e 443 na Oracle Cloud & Linux
+
+> ⚠️ **IMPORTANTE:** NÃO abra as portas 8000 ou 3306 na Security List da Oracle Cloud!
+> O FastAPI roda somente em localhost e o MySQL deve ser acessível apenas localmente.
+
+Na VM Oracle (Ubuntu), execute no terminal:
 
 ```bash
-# 1. Liberar portas no firewall local da VM (iptables / ufw)
+# 1. Liberar portas no firewall local da VM (iptables)
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
 sudo netfilter-persistent save
@@ -49,12 +62,20 @@ sudo apt update
 sudo apt install -y nginx certbot python3-certbot-nginx
 ```
 
-> **Atenção (Oracle Cloud Security List):**  
-> No painel web da Oracle Cloud, na sua **VCN (Virtual Cloud Network) ➔ Security Lists ➔ Ingress Rules**, certifique-se de que as portas `80` (HTTP) e `443` (HTTPS) estão abertas com Source CIDR `0.0.0.0/0`.
+> **Oracle Cloud Security List (Ingress Rules):**
+> Certifique-se de que APENAS estas portas estão abertas:
+> | Porta | Protocolo | Source CIDR | Descrição |
+> |-------|-----------|-------------|-----------|
+> | 22 | TCP | 0.0.0.0/0 | SSH |
+> | 80 | TCP | 0.0.0.0/0 | HTTP (redirect → HTTPS) |
+> | 443 | TCP | 0.0.0.0/0 | HTTPS (Nginx) |
+> | — | ICMP | — | Padrão Oracle (manter) |
+>
+> **REMOVA** qualquer regra para as portas `8000`, `3306` e `3506`.
 
 ---
 
-### 3. Configurar o Nginx como Proxy Reverso
+### 3. Configurar o Nginx como Proxy Reverso (com Rate Limiting e Security Headers)
 
 Crie o arquivo de configuração do Nginx:
 
@@ -65,11 +86,58 @@ sudo nano /etc/nginx/sites-available/jumppark
 Cole o conteúdo abaixo (substitua `painel-jumppark.duckdns.org` pelo seu subdomínio escolhido):
 
 ```nginx
+# ── Rate Limiting ────────────────────────────────────────────────────────────
+# Limita cada IP a 5 requisições por segundo (burst de 10 com delay).
+# Protege a VM micro (1GB RAM) contra brute-force e varreduras de bots.
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=5r/s;
+
+# ── Bloquear acesso direto por IP (sem domínio) ─────────────────────────────
+server {
+    listen 80 default_server;
+    listen 443 default_server;
+    server_name _;
+    return 444;  # Fecha a conexão silenciosamente
+}
+
+# ── Servidor Principal ──────────────────────────────────────────────────────
 server {
     listen 80;
     server_name painel-jumppark.duckdns.org;
 
+    # Redirecionar HTTP → HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name painel-jumppark.duckdns.org;
+
+    # ── SSL será configurado automaticamente pelo Certbot ──
+    # ssl_certificate     /etc/letsencrypt/live/painel-jumppark.duckdns.org/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/painel-jumppark.duckdns.org/privkey.pem;
+
+    # ── Security Headers ───────────────────────────────────────────────────
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # ── Proxy para FastAPI (somente localhost) ─────────────────────────────
     location / {
+        limit_req zone=api_limit burst=10 delay=5;
+
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ── Rate Limit mais restritivo para endpoints de autenticação ──────────
+    location /api/auth/ {
+        limit_req zone=api_limit burst=3 nodelay;
+
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -130,8 +198,21 @@ Se você já tem um domínio próprio (no Registro.br, Hostinger, GoDaddy, Cloud
 Para atualizar o frontend na VM com as novas alterações feitas no projeto:
 
 ```bash
-cd /caminho/do/projeto/jump_park_worker
+cd ~/jump_park_worker
 git pull origin main
-sudo systemctl restart jump_park_worker.service
+sudo systemctl restart jump_worker
 ```
 *(O FastAPI recarregará o novo `src/static/index.html` instantaneamente).*
+
+---
+
+## 🔒 Checklist de Segurança Pós-Deploy
+
+Após o deploy, confirme que tudo está trancado:
+
+- [ ] **Oracle Cloud Security Lists:** Apenas portas `22`, `80` e `443` abertas. Portas `8000`, `3306`, `3506` **REMOVIDAS**.
+- [ ] **FastAPI:** Rodando em `127.0.0.1:8000` (apenas localhost).
+- [ ] **Nginx:** Rodando com Rate Limit, Security Headers e SSL.
+- [ ] **MySQL:** Acessível apenas localmente (sem porta 3306 exposta).
+- [ ] **Teste:** Acessar `http://168.138.131.8:8000` no navegador deve retornar **Connection Refused** (porta fechada).
+- [ ] **Teste:** Acessar `https://painel-jumppark.duckdns.org` deve abrir o painel normalmente.

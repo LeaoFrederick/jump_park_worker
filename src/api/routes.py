@@ -13,12 +13,15 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api.auth import (
     check_user_auth_status,
+    create_impersonation_token,
     create_session_token,
     format_display_name_from_email,
     get_current_user,
     get_google_client_id,
+    is_admin,
     is_email_authorized,
     load_auth_config,
+    require_admin,
     set_user_pin,
     verify_google_token,
     verify_user_pin,
@@ -28,6 +31,7 @@ from src.api.schemas import (
     ActionResponse,
     EventoRequest,
     EventoResponse,
+    ImpersonateRequest,
 )
 from src.config import get_ready_establishments
 from src.core.jumppark_client import (
@@ -58,13 +62,19 @@ app = FastAPI(
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# CORS aberto — permite requisições de qualquer origem
+# CORS restrito — frontend e API compartilham o mesmo domínio via Nginx.
+# Apenas origens confiáveis são permitidas (DuckDNS + desenvolvimento local).
+_ALLOWED_ORIGINS = [
+    "https://painel-jumppark.duckdns.org",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -391,7 +401,7 @@ def bloquear(payload: ActionRequest, user: dict = Depends(get_current_user)):
 
 
 @app.post("/api/desbloquear", response_model=ActionResponse)
-def desbloquear(payload: ActionRequest, user: dict = Depends(get_current_user)):
+def desbloquear(payload: ActionRequest, user: dict = Depends(require_admin)):
     """
     Desbloqueia uma placa em TODOS os estabelecimentos ativos.
     Remove a placa do cliente 'CARRO BLOQUEADO' via API Jump Park
@@ -511,6 +521,53 @@ def criar_evento(payload: EventoRequest, user: dict = Depends(get_current_user))
 def health():
     """Healthcheck simples — confirma que a API está respondendo."""
     return {"status": "ok", "service": "jump_park_worker_api"}
+
+
+@app.get("/api/auth/me")
+def auth_me(user: dict = Depends(get_current_user)):
+    """
+    Retorna o perfil do usuário autenticado com role e status de impersonation.
+    Usado pelo frontend para decidir quais controles exibir.
+    """
+    return {
+        "email": user.get("email"),
+        "name": user.get("name"),
+        "role": user.get("role", "OPERATOR"),
+        "impersonated_by": user.get("impersonated_by"),
+    }
+
+
+@app.post("/api/auth/impersonate")
+def impersonate(payload: ImpersonateRequest, admin: dict = Depends(require_admin)):
+    """
+    Permite que um ADMIN inicie uma sessão em nome de um OPERATOR.
+    Gera um token temporário de 2h sem precisar do PIN do operador alvo.
+    Impersonation de outro ADMIN é bloqueada.
+    """
+    result = create_impersonation_token(admin, payload.target_email)
+    if result is None:
+        # Pode ser: operador não encontrado ou tentativa de impersonar ADMIN
+        target = load_auth_config()
+        target_user = next(
+            (u for u in target.get("authorized_users", []) if u["email"] == payload.target_email.strip().lower()),
+            None,
+        )
+        if target_user and is_admin(target_user):
+            raise HTTPException(
+                status_code=403,
+                detail="Não é permitido impersonar outro administrador.",
+            )
+        raise HTTPException(
+            status_code=404,
+            detail=f"Operador '{payload.target_email}' não encontrado na lista de autorizados.",
+        )
+
+    return {
+        "token": result["token"],
+        "user": result["user"],
+        "expires_in": 7200,
+        "message": f"Sessão iniciada como {result['user']['name']} (expira em 2h).",
+    }
 
 
 @app.get("/api/historico")

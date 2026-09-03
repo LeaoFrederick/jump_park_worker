@@ -128,12 +128,16 @@ def load_auth_config() -> dict:
             name = item.get("name") or format_display_name_from_email(email)
             # Prioriza o PIN salvo em user_credentials.json
             pin = saved_creds.get(email) or str(item.get("pin", "")).strip()
-            merged_users.append({"email": email, "name": name, "pin": pin})
+            # Preserva o role definido no JSON; padrão OPERATOR se ausente
+            role = str(item.get("role", "OPERATOR")).upper().strip()
+            if role not in ("ADMIN", "OPERATOR"):
+                role = "OPERATOR"
+            merged_users.append({"email": email, "name": name, "pin": pin, "role": role})
         elif isinstance(item, str) and item.strip():
             email = item.strip().lower()
             name = format_display_name_from_email(email)
             pin = saved_creds.get(email, "")
-            merged_users.append({"email": email, "name": name, "pin": pin})
+            merged_users.append({"email": email, "name": name, "pin": pin, "role": "OPERATOR"})
 
     return {"authorized_users": merged_users}
 
@@ -236,25 +240,43 @@ def verify_google_token(credential: str) -> Optional[dict]:
         email = info.get("email", "").strip().lower()
         if not email or not info.get("email_verified") in (True, "true", "True"):
             return None
+        # Busca o role do usuário cadastrado localmente (se existir)
+        registered = get_user_by_email(email)
+        role = registered.get("role", "OPERATOR") if registered else "OPERATOR"
         return {
             "email": email,
             "name": info.get("name") or format_display_name_from_email(email),
             "picture": info.get("picture", ""),
+            "role": role,
         }
     except Exception as e:
         log.error(f"[AUTH] Erro ao validar Google token: {e}")
         return None
 
 
-def create_session_token(user_data: dict) -> str:
-    """Gera um token de sessão assinado com HMAC-SHA256."""
-    payload = {
+def create_session_token(user_data: dict, duration_seconds: Optional[int] = None) -> str:
+    """
+    Gera um token de sessão assinado com HMAC-SHA256.
+    Inclui role e impersonated_by (se presente) no payload.
+    Aceita duration_seconds opcional para tokens de impersonation (ex: 7200 = 2h).
+    """
+    duration = duration_seconds if duration_seconds is not None else SESSION_DURATION_SECONDS
+    role = str(user_data.get("role", "OPERATOR")).upper()
+    if role not in ("ADMIN", "OPERATOR"):
+        role = "OPERATOR"
+
+    payload: dict = {
         "email": user_data["email"],
         "name": user_data.get("name", "") or format_display_name_from_email(user_data["email"]),
         "picture": user_data.get("picture", ""),
-        "exp": int(time.time()) + SESSION_DURATION_SECONDS,
+        "role": role,
+        "exp": int(time.time()) + duration,
         "iat": int(time.time()),
     }
+    # Preserva impersonated_by se presente (sessão de impersonation)
+    if user_data.get("impersonated_by"):
+        payload["impersonated_by"] = str(user_data["impersonated_by"]).strip().lower()
+
     raw_payload = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     b64_payload = base64.urlsafe_b64encode(raw_payload).decode("utf-8").rstrip("=")
 
@@ -268,7 +290,7 @@ def create_session_token(user_data: dict) -> str:
 
 
 def verify_session_token(token: str) -> Optional[dict]:
-    """Valida a assinatura e expiração de um token de sessão."""
+    """Valida a assinatura e expiração de um token de sessão. Retorna payload com role."""
     if not token or "." not in token:
         return None
 
@@ -294,20 +316,25 @@ def verify_session_token(token: str) -> Optional[dict]:
         if not is_email_authorized(payload.get("email", "")):
             return None
 
+        # Garante que role sempre está presente; fallback para o valor cadastrado
+        if not payload.get("role"):
+            registered = get_user_by_email(payload.get("email", ""))
+            payload["role"] = registered.get("role", "OPERATOR") if registered else "OPERATOR"
+
         return payload
-    except Exception as e:
+    except Exception:
         return None
 
 
 def get_current_user(
     authorization: Optional[str] = Header(None),
 ) -> dict:
-    """Dependência FastAPI que protege rotas operacionais."""
+    """Dependência FastAPI que protege rotas operacionais. Retorna payload com role."""
     cfg = load_auth_config()
     authorized_list = cfg.get("authorized_users", [])
 
     if not authorized_list:
-        return {"email": "operador@local", "name": "Operador", "picture": ""}
+        return {"email": "operador@local", "name": "Operador", "picture": "", "role": "ADMIN"}
 
     if not authorization:
         raise HTTPException(
@@ -330,3 +357,63 @@ def get_current_user(
         )
 
     return user
+
+
+# ---------------------------------------------------------------------------
+# RBAC — Controle de Acesso Baseado em Roles
+# ---------------------------------------------------------------------------
+
+def is_admin(user: dict) -> bool:
+    """Retorna True se o usuário possui role ADMIN."""
+    return str(user.get("role", "")).upper() == "ADMIN"
+
+
+from fastapi import Depends  # noqa: E402 — import aqui para evitar circular
+
+
+def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    """
+    Dependência FastAPI que restringe rotas exclusivas de ADMIN.
+    Retorna HTTP 403 para usuários com role OPERATOR.
+    """
+    if not is_admin(user):
+        log.warning(
+            "[AUTH] Acesso negado a rota restrita para %s (role=%s).",
+            user.get("email"),
+            user.get("role"),
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Permissão negada. Apenas administradores podem realizar esta ação.",
+        )
+    return user
+
+
+def create_impersonation_token(admin: dict, target_email: str) -> Optional[dict]:
+    """
+    Gera um token de sessão temporário (2h) para que um ADMIN
+    atue em nome de um OPERATOR sem necessitar do PIN do alvo.
+    Retorna dict com token e dados do usuário impersonado, ou None se inválido.
+    """
+    target = get_user_by_email(target_email)
+    if not target:
+        return None
+
+    # Impersonation de outro ADMIN é bloqueada por segurança
+    if is_admin(target):
+        return None
+
+    impersonated_user = {
+        "email": target["email"],
+        "name": target.get("name") or format_display_name_from_email(target["email"]),
+        "picture": "",
+        "role": target.get("role", "OPERATOR"),
+        "impersonated_by": str(admin["email"]).strip().lower(),
+    }
+    token = create_session_token(impersonated_user, duration_seconds=7200)  # 2h
+    log.info(
+        "[IMPERSONATE] Admin %s iniciou sessão como operador %s.",
+        admin["email"],
+        target["email"],
+    )
+    return {"token": token, "user": impersonated_user}

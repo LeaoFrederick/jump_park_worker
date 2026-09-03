@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+﻿# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -187,3 +187,9 @@ config/user_credentials.json
 config/*.tmp
 authorized_users.json
 user_credentials.json
+
+# Maestro Multi-Agent Orchestrator
+# Pasta completa do orquestrador (não deve ser versionada)
+maestro_skills/
+# Infraestrutura de controle em tempo de execução (travas, mensagens, registros de atividades)
+.antigravity/equipe/

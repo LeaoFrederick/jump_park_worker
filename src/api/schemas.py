@@ -56,3 +56,12 @@ class EventoResponse(BaseModel):
     status: str = "ok"
     message: str
     evento_id: int | None = None
+
+
+class ImpersonateRequest(BaseModel):
+    """Payload para o endpoint de impersonation — exclusivo de ADMIN."""
+    target_email: str = Field(
+        ...,
+        description="E-mail do operador (OPERATOR) a ser impersonado",
+        examples=["caio@falves.com"],
+    )

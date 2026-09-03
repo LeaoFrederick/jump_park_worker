@@ -155,7 +155,8 @@ CACHE_DURATION    = int(os.getenv("CACHE_DURATION_SECONDS", "1800"))    # 30 min
 TAXA_VALOR        = float(os.getenv("TAXA_BLOQUEIO_VALOR", "200.00"))   # valor da taxa de desbloqueio
 WINDOW_DAYS       = int(os.getenv("SEARCH_WINDOW_DAYS", "1"))           # janela de busca de OS
 
-API_HOST          = os.getenv("API_HOST", "0.0.0.0")
+# Segurança: bind apenas em localhost — todo tráfego externo passa pelo Nginx (HTTPS)
+API_HOST          = os.getenv("API_HOST", "127.0.0.1")
 API_PORT          = int(os.getenv("API_PORT", "8000"))
 
 DATABASE_URL      = os.getenv("DATABASE_URL")
