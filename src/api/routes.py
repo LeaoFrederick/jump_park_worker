@@ -65,7 +65,7 @@ if STATIC_DIR.exists():
 # CORS restrito — frontend e API compartilham o mesmo domínio via Nginx.
 # Apenas origens confiáveis são permitidas (DuckDNS + desenvolvimento local).
 _ALLOWED_ORIGINS = [
-    "https://painel-jumppark.duckdns.org",
+    "https://painelrestricaocentro.duckdns.org",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
