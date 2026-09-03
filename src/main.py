@@ -17,7 +17,7 @@ import traceback
 import uvicorn
 
 from src.api import app
-from src.bot import start_discord_bot
+
 from src.config import (
     API_HOST,
     API_PORT,
@@ -83,9 +83,7 @@ def main() -> None:
     api_thread = threading.Thread(target=_start_api_server, daemon=True)
     api_thread.start()
 
-    # 4. Inicia Bot do Discord em thread daemon
-    discord_thread = threading.Thread(target=start_discord_bot, daemon=True)
-    discord_thread.start()
+
 
     # Notificação de inicialização com sucesso no Discord
     ready_labels = [e.label for e in establishments if e.is_ready]
@@ -93,7 +91,7 @@ def main() -> None:
         "🟢 **JUMP PARK WORKER — INICIADO COM SUCESSO** 🟢\n"
         f"- **Estabelecimentos:** {', '.join(ready_labels)}\n"
         f"- **API FastAPI:** `http://{API_HOST}:{API_PORT}`\n"
-        f"- **Discord Bot:** Ativo para comandos remotos (/status, /placas, etc.)\n"
+        f"- **Painel Web:** Acesse em `https://painelrestricaocentro.duckdns.org`\n"
         f"- **Intervalo de Polling:** `{POLLING_INTERVAL}s` | **Janela OS:** `{WINDOW_DAYS}d`\n"
         f"- **Status:** Monitoramento ativo e persistência no MySQL"
     )
